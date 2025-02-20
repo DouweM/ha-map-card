@@ -1,4 +1,4 @@
-import {Map, LayerGroup, LatLngBounds} from "leaflet";
+import { Map, LayerGroup, LatLngBounds } from "leaflet";
 import EntityConfig from "../../configs/EntityConfig";
 import Entity from "../../models/Entity";
 import Logger from "../../util/Logger";
@@ -8,9 +8,7 @@ import HaLinkedEntityService from "../HaLinkedEntityService";
 import HaHistoryService from "../HaHistoryService";
 import FocusFollowConfig from "../../configs/FocusFollowConfig";
 
-
 export default class EntitiesRenderService {
-
   /** @type {[Entity]} */
   entities = [];
   /** @type {[EntityConfig]} */
@@ -30,7 +28,16 @@ export default class EntitiesRenderService {
   /** @type {FocusFollowConfig} */
   focusFollowConfig;
 
-  constructor(map, hass, focusFollowConfig, entityConfigs, linkedEntityService, dateRangeManager, historyService, isDarkMode) {
+  constructor(
+    map,
+    hass,
+    focusFollowConfig,
+    entityConfigs,
+    linkedEntityService,
+    dateRangeManager,
+    historyService,
+    isDarkMode
+  ) {
     this.map = map;
     this.hass = hass;
     this.focusFollowConfig = focusFollowConfig;
@@ -42,21 +49,32 @@ export default class EntitiesRenderService {
   }
 
   setup() {
-    this.entities = this.entityConfigs.map((configEntity) => {
-      // Attempt to setup entity. Skip on fail, so one bad entity does not affect others.
-      try {
-        const entity = new Entity(configEntity, this.hass, this.map, this.historyService, this.dateRangeManager, this.linkedEntityService, this.isDarkMode);
-        entity.setup();
-        return entity; 
-      } catch (e){
-        Logger.error("Entity: " + configEntity.id + " skipped due to missing data", e);
-        HaMapUtilities.renderWarningOnMap(this.map, "Entity: " + configEntity.id + " could not be loaded. See console for details.");
-        return null;
-      }
-    })
-    // Remove skipped entities.
-    .filter(v => v);
-
+    this.entities = this.entityConfigs
+      .map((configEntity) => {
+        // Attempt to setup entity. Skip on fail, so one bad entity does not affect others.
+        try {
+          const entity = new Entity(
+            configEntity,
+            this.hass,
+            this.map,
+            this.historyService,
+            this.dateRangeManager,
+            this.linkedEntityService,
+            this.isDarkMode
+          );
+          entity.setup();
+          return entity;
+        } catch (e) {
+          Logger.error(
+            "Entity: " + configEntity.id + " skipped due to missing data",
+            e
+          );
+          // HaMapUtilities.renderWarningOnMap(this.map, "Entity: " + configEntity.id + " could not be loaded. See console for details.");
+          return null;
+        }
+      })
+      // Remove skipped entities.
+      .filter((v) => v);
   }
 
   async render() {
@@ -67,32 +85,42 @@ export default class EntitiesRenderService {
   }
 
   updateInitialView() {
-    if(this.focusFollowConfig.isNone) {
+    if (this.focusFollowConfig.isNone) {
       return;
     }
-    const points = this.entities.filter(e => e.config.focusOnFit).map((e) => e.latLng);
-    if(points.length === 0) {
+    const points = this.entities
+      .filter((e) => e.config.focusOnFit)
+      .map((e) => e.latLng);
+    if (points.length === 0) {
       return;
     }
     // If not, get bounds of all markers rendered
-    const bounds = (new LatLngBounds(points)).pad(0.1);
-    if(this.focusFollowConfig.isContains) {
-      if(this.map.getBounds().contains(bounds)) {
+    const bounds = new LatLngBounds(points).pad(0.1);
+    if (this.focusFollowConfig.isContains) {
+      if (this.map.getBounds().contains(bounds)) {
         return;
       }
     }
     this.map.fitBounds(bounds);
-    Logger.debug("[EntitiesRenderService.updateInitialView]: Updating bounds to: " + points.join(","));
+    Logger.debug(
+      "[EntitiesRenderService.updateInitialView]: Updating bounds to: " +
+        points.join(",")
+    );
   }
 
   setInitialView() {
-    const points = this.entities.filter(e => e.config.focusOnFit).map((e) => e.latLng);
-    if(points.length === 0) {
+    const points = this.entities
+      .filter((e) => e.config.focusOnFit)
+      .map((e) => e.latLng);
+    if (points.length === 0) {
       return;
     }
     // If not, get bounds of all markers rendered
-    const bounds = (new LatLngBounds(points)).pad(0.1);    
+    const bounds = new LatLngBounds(points).pad(0.1);
     this.map.fitBounds(bounds);
-    Logger.debug("[EntitiesRenderService.setInitialView]: Setting initial view to: " + points.join(","));
+    Logger.debug(
+      "[EntitiesRenderService.setInitialView]: Setting initial view to: " +
+        points.join(",")
+    );
   }
 }
