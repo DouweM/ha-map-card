@@ -16189,10 +16189,12 @@ class Entity {
   _updateMarkerIcon() {
     if (!this.marker) return;
     const el = this.marker.getElement();
-    if (!el || !el.firstElementChild) return;
+    if (!el) return;
+    const wrapper = el.querySelector('.spread-wrapper');
+    if (!wrapper) return;
     const offsetX = this._spreadOffset?.x ?? 0;
     const offsetY = this._spreadOffset?.y ?? 0;
-    el.firstElementChild.style.transform = (offsetX || offsetY) ? `translate(${offsetX}px, ${offsetY}px)` : '';
+    wrapper.style.transform = (offsetX || offsetY) ? `translate(${offsetX}px, ${offsetY}px)` : '';
   }
 
   _createIcon() {
@@ -16210,20 +16212,22 @@ class Entity {
 
     return new leafletSrcExports.DivIcon({
       html: `
-        <map-card-entity-marker
-          entity-id="${this.id}"
-          title="${this.title}"
-          prefix="${this.config.prefix}"
-          suffix="${this.config.suffix}"
-          tooltip="${this.tooltip}"
-          icon="${icon ?? ""}"
-          picture="${picture ?? ""}"
-          color="${this.config.color}"
-          style="${this.config.css}"
-          size="${this.config.size}"
-          extra-css-classes="${extraCssClasses}"
-          tap-action='${JSON.stringify(this.config.tapAction)}'
-        ></map-card-entity-marker>
+        <div class="spread-wrapper">
+          <map-card-entity-marker
+            entity-id="${this.id}"
+            title="${this.title}"
+            prefix="${this.config.prefix}"
+            suffix="${this.config.suffix}"
+            tooltip="${this.tooltip}"
+            icon="${icon ?? ""}"
+            picture="${picture ?? ""}"
+            color="${this.config.color}"
+            style="${this.config.css}"
+            size="${this.config.size}"
+            extra-css-classes="${extraCssClasses}"
+            tap-action='${JSON.stringify(this.config.tapAction)}'
+          ></map-card-entity-marker>
+        </div>
       `,
       iconSize: [this.config.size, this.config.size],
       className: ''
