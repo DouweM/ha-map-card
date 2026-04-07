@@ -32,10 +32,10 @@ export default class EntitiesRenderService {
   focusFollowConfig;
   /** @type {L.MarkerClusterGroup} */
   markerClusterGroup;
-  /** @type {boolean} */
-  clusterMarkers;
+  /** @type {string} */
+  markerGrouping;
 
-  constructor(map, hass, focusFollowConfig, entityConfigs, linkedEntityService, dateRangeManager, historyService, isDarkMode, clusterMarkers = true) {
+  constructor(map, hass, focusFollowConfig, entityConfigs, linkedEntityService, dateRangeManager, historyService, isDarkMode, markerGrouping = "none") {
     this.map = map;
     this.hass = hass;
     this.focusFollowConfig = focusFollowConfig;
@@ -44,13 +44,12 @@ export default class EntitiesRenderService {
     this.dateRangeManager = dateRangeManager;
     this.historyService = historyService;
     this.isDarkMode = isDarkMode;
-    this.clusterMarkers = clusterMarkers;
+    this.markerGrouping = markerGrouping;
   }
 
   setup() {
-    // Initialize marker cluster group if clustering is enabled
-    Logger.debug("[EntitiesRenderService] Clustering enabled: " + this.clusterMarkers);
-    if (this.clusterMarkers) {
+    Logger.debug("[EntitiesRenderService] Marker grouping mode: " + this.markerGrouping);
+    if (this.markerGrouping === "cluster") {
       this.markerClusterGroup = L.markerClusterGroup({
         showCoverageOnHover: false,
         removeOutsideVisibleBounds: false,
@@ -80,13 +79,61 @@ export default class EntitiesRenderService {
     this.entities.forEach((ent) => {
       ent.update(this.markerClusterGroup);
     });
+    if (this.markerGrouping === "spread") {
+      this._updateSpreadOffsets();
+    }
     this.updateInitialView();
   }
 
-  toggleClustering() {
-    this.clusterMarkers = !this.clusterMarkers;
+  _updateSpreadOffsets() {
+    // Group entities by proximity (within ~1 meter), excluding group: false entities
+    const groups = new Map();
+    for (const entity of this.entities) {
+      if (!entity.marker || entity.config.group === false) continue;
+      const latLng = entity.latLng;
+      const key = `${latLng.lat.toFixed(5)},${latLng.lng.toFixed(5)}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(entity);
+    }
 
-    if (this.clusterMarkers) {
+    for (const group of groups.values()) {
+      if (group.length <= 1) {
+        // Single entity — clear any previous offset
+        if (group[0]._spreadOffset) {
+          group[0]._spreadOffset = null;
+          group[0]._updateMarkerIcon();
+        }
+        continue;
+      }
+
+      const n = group.length;
+      const maxSize = Math.max(...group.map(e => e.config.size));
+      const radius = maxSize * 0.35;
+
+      for (let i = 0; i < n; i++) {
+        const angle = (2 * Math.PI * i / n) - Math.PI / 2; // start from top
+        const newOffset = {
+          x: Math.round(Math.cos(angle) * radius),
+          y: Math.round(Math.sin(angle) * radius)
+        };
+
+        const prev = group[i]._spreadOffset;
+        if (!prev || prev.x !== newOffset.x || prev.y !== newOffset.y) {
+          group[i]._spreadOffset = newOffset;
+          group[i]._updateMarkerIcon();
+        }
+      }
+    }
+  }
+
+  toggleClustering() {
+    if (this.markerGrouping === "cluster") {
+      this.markerGrouping = "none";
+    } else {
+      this.markerGrouping = "cluster";
+    }
+
+    if (this.markerGrouping === "cluster") {
       // Enable clustering
       this.markerClusterGroup = L.markerClusterGroup({
         showCoverageOnHover: false,
@@ -94,9 +141,9 @@ export default class EntitiesRenderService {
       });
       this.map.addLayer(this.markerClusterGroup);
 
-      // Move all markers to cluster group
+      // Move non-excluded markers to cluster group
       this.entities.forEach((entity) => {
-        if (entity.marker && this.map.hasLayer(entity.marker)) {
+        if (entity.marker && entity.config.group !== false && this.map.hasLayer(entity.marker)) {
           this.map.removeLayer(entity.marker);
           this.markerClusterGroup.addLayer(entity.marker);
         }
@@ -143,7 +190,7 @@ export default class EntitiesRenderService {
       return;
     }
     // If not, get bounds of all markers rendered
-    const bounds = (new LatLngBounds(points)).pad(0.1);    
+    const bounds = (new LatLngBounds(points)).pad(0.1);
     this.map.fitBounds(bounds);
     Logger.debug("[EntitiesRenderService.setInitialView]: Setting initial view to: " + points.join(","));
   }

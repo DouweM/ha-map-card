@@ -84,7 +84,7 @@ export default class EntityConfig {
     this.attribute = config.attribute ? config.attribute : "";
     this.prefix = config.display === "attribute" ? (config.prefix ? config.prefix : "") : "";
     this.suffix = config.display === "attribute" ? (config.suffix ? config.suffix : "") : "";
-    this.label = config.label ?? null;
+    this.label = config.label;
     this.size = config.size ? config.size : 48;
     // If historyLineColor not set, inherit icon color
     this.color = config.color ?? this._generateRandomColor();
@@ -132,6 +132,7 @@ export default class EntityConfig {
 
     this.useBaseEntityOnly = config.use_base_entity_only ?? false;
     this.positionUpdateThreshold = config.position_update_threshold ?? 10;
+    this.group = config.group ?? true;
 
     this.circleConfig = new CircleConfig(config.circle, this.color);
     this.geoJsonConfig = new GeoJsonConfig(config.geojson, this.color);

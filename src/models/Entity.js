@@ -162,7 +162,7 @@ export default class Entity {
         this.updateDistanceTooltip(this.hass);
       }
 
-      if (clusterGroup) {
+      if (clusterGroup && this.config.group !== false) {
         Logger.debug("[Entity] Adding marker for " + this.id + " to cluster group");
         clusterGroup.addLayer(this.marker);
       } else {
@@ -191,9 +191,10 @@ export default class Entity {
 
   /** @returns {string} */
   get title() {
-    // Use custom label if provided
-    if (this.config.label) {
-      return this.config.label;
+    // label explicitly set to null or "" suppresses the label
+    // label not set (undefined) falls through to default behavior
+    if (this.config.label !== undefined) {
+      return this.config.label ?? "";
     }
     if (this.display == "state") {
       return this.state;
@@ -276,7 +277,7 @@ export default class Entity {
           this.marker = this.createMapMarker();
           if (wasInCluster) {
             clusterGroup.addLayer(this.marker);
-          } else if (clusterGroup) {
+          } else if (clusterGroup && this.config.group !== false) {
             clusterGroup.addLayer(this.marker);
           } else {
             this.marker.addTo(this.map);
@@ -300,11 +301,16 @@ export default class Entity {
   }
 
   /**
-   * @private 
-   * @returns {Marker}
+   * @type {{x: number, y: number} | null}
    */
-  createMapMarker() {
-    Logger.debug("[MarkerEntity] Creating marker for " + this.id + " with display mode " + this.display);
+  _spreadOffset = null;
+
+  _updateMarkerIcon() {
+    if (!this.marker) return;
+    this.marker.setIcon(this._createIcon());
+  }
+
+  _createIcon() {
     let icon = this.icon;
     let picture = this.picture;
     if (this.display == "icon") {
@@ -316,28 +322,42 @@ export default class Entity {
     }
 
     const extraCssClasses = this.darkMode ? "dark" : "";
+    const halfSize = this.config.size / 2;
+    const anchorX = halfSize - (this._spreadOffset?.x ?? 0);
+    const anchorY = halfSize - (this._spreadOffset?.y ?? 0);
+
+    return new DivIcon({
+      html: `
+        <map-card-entity-marker
+          entity-id="${this.id}"
+          title="${this.title}"
+          prefix="${this.config.prefix}"
+          suffix="${this.config.suffix}"
+          tooltip="${this.tooltip}"
+          icon="${icon ?? ""}"
+          picture="${picture ?? ""}"
+          color="${this.config.color}"
+          style="${this.config.css}"
+          size="${this.config.size}"
+          extra-css-classes="${extraCssClasses}"
+          tap-action='${JSON.stringify(this.config.tapAction)}'
+        ></map-card-entity-marker>
+      `,
+      iconSize: [this.config.size, this.config.size],
+      iconAnchor: [anchorX, anchorY],
+      className: ''
+    });
+  }
+
+  /**
+   * @private
+   * @returns {Marker}
+   */
+  createMapMarker() {
+    Logger.debug("[MarkerEntity] Creating marker for " + this.id + " with display mode " + this.display);
 
     return new Marker(this.latLng, {
-      icon: new DivIcon({
-        html: `
-          <map-card-entity-marker
-            entity-id="${this.id}"
-            title="${this.title}"
-            prefix="${this.config.prefix}"
-            suffix="${this.config.suffix}"
-            tooltip="${this.tooltip}"
-            icon="${icon ?? ""}"
-            picture="${picture ?? ""}"
-            color="${this.config.color}"
-            style="${this.config.css}"
-            size="${this.config.size}"
-            extra-css-classes="${extraCssClasses}"
-            tap-action='${JSON.stringify(this.config.tapAction)}'
-          ></map-card-entity-marker>
-        `,
-        iconSize: [this.config.size, this.config.size],
-        className: ''
-      }),
+      icon: this._createIcon(),
       title: this.id,
       zIndexOffset: this.config.zIndexOffset
     });

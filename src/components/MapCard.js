@@ -75,7 +75,7 @@ export default class MapCard extends LitElement {
       this.dateRangeManager = new HaDateRangeService(this.hass);
     }
     this.tileLayersService = new TileLayersService(this.map, this._config.tileLayers, this._config.wms, this.urlResolver, this.linkedEntityService, this.dateRangeManager);
-    this.entitiesRenderService = new EntitiesRenderService(this.map, this.hass, this._config.focusFollow, this._config.entities, this.linkedEntityService, this.dateRangeManager, this.historyService, this._isDarkMode(), this._config.clusterMarkers);
+    this.entitiesRenderService = new EntitiesRenderService(this.map, this.hass, this._config.focusFollow, this._config.entities, this.linkedEntityService, this.dateRangeManager, this.historyService, this._isDarkMode(), this._config.markerGrouping);
     this.initialViewRenderService = new InitialViewRenderService(this.map, this._config, this.hass, this.entitiesRenderService);
 
     this.pluginsRenderService = new PluginsRenderService(this.map, this._config.plugins);
@@ -139,7 +139,7 @@ export default class MapCard extends LitElement {
                   >
                     <ha-icon icon="mdi:image-filter-center-focus"></ha-icon>
                   </ha-icon-button>
-                  ${this._config.clusterMarkers ? html`
+                  ${this._config.markerGrouping === "cluster" ? html`
                     <ha-icon-button
                       label='Toggle grouping'
                       style='${this._isDarkMode() ? "color:#ffffff;" : "color:#000000;"} position: absolute; top: 115px; left: 3px; z-index: 1;'
