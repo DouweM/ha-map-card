@@ -322,29 +322,30 @@ export default class Entity {
     }
 
     const extraCssClasses = this.darkMode ? "dark" : "";
-    const halfSize = this.config.size / 2;
-    const anchorX = halfSize - (this._spreadOffset?.x ?? 0);
-    const anchorY = halfSize - (this._spreadOffset?.y ?? 0);
+    const offsetX = this._spreadOffset?.x ?? 0;
+    const offsetY = this._spreadOffset?.y ?? 0;
+    const spreadStyle = (offsetX || offsetY) ? `transform: translate(${offsetX}px, ${offsetY}px);` : '';
 
     return new DivIcon({
       html: `
-        <map-card-entity-marker
-          entity-id="${this.id}"
-          title="${this.title}"
-          prefix="${this.config.prefix}"
-          suffix="${this.config.suffix}"
-          tooltip="${this.tooltip}"
-          icon="${icon ?? ""}"
-          picture="${picture ?? ""}"
-          color="${this.config.color}"
-          style="${this.config.css}"
-          size="${this.config.size}"
-          extra-css-classes="${extraCssClasses}"
-          tap-action='${JSON.stringify(this.config.tapAction)}'
-        ></map-card-entity-marker>
+        <div style="${spreadStyle}">
+          <map-card-entity-marker
+            entity-id="${this.id}"
+            title="${this.title}"
+            prefix="${this.config.prefix}"
+            suffix="${this.config.suffix}"
+            tooltip="${this.tooltip}"
+            icon="${icon ?? ""}"
+            picture="${picture ?? ""}"
+            color="${this.config.color}"
+            style="${this.config.css}"
+            size="${this.config.size}"
+            extra-css-classes="${extraCssClasses}"
+            tap-action='${JSON.stringify(this.config.tapAction)}'
+          ></map-card-entity-marker>
+        </div>
       `,
       iconSize: [this.config.size, this.config.size],
-      iconAnchor: [anchorX, anchorY],
       className: ''
     });
   }
