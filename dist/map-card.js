@@ -16188,7 +16188,11 @@ class Entity {
 
   _updateMarkerIcon() {
     if (!this.marker) return;
-    this.marker.setIcon(this._createIcon());
+    const el = this.marker.getElement();
+    if (!el || !el.firstElementChild) return;
+    const offsetX = this._spreadOffset?.x ?? 0;
+    const offsetY = this._spreadOffset?.y ?? 0;
+    el.firstElementChild.style.transform = (offsetX || offsetY) ? `translate(${offsetX}px, ${offsetY}px)` : '';
   }
 
   _createIcon() {
@@ -16203,28 +16207,23 @@ class Entity {
     }
 
     const extraCssClasses = this.darkMode ? "dark" : "";
-    const offsetX = this._spreadOffset?.x ?? 0;
-    const offsetY = this._spreadOffset?.y ?? 0;
-    const spreadStyle = (offsetX || offsetY) ? `transform: translate(${offsetX}px, ${offsetY}px);` : '';
 
     return new leafletSrcExports.DivIcon({
       html: `
-        <div style="${spreadStyle}">
-          <map-card-entity-marker
-            entity-id="${this.id}"
-            title="${this.title}"
-            prefix="${this.config.prefix}"
-            suffix="${this.config.suffix}"
-            tooltip="${this.tooltip}"
-            icon="${icon ?? ""}"
-            picture="${picture ?? ""}"
-            color="${this.config.color}"
-            style="${this.config.css}"
-            size="${this.config.size}"
-            extra-css-classes="${extraCssClasses}"
-            tap-action='${JSON.stringify(this.config.tapAction)}'
-          ></map-card-entity-marker>
-        </div>
+        <map-card-entity-marker
+          entity-id="${this.id}"
+          title="${this.title}"
+          prefix="${this.config.prefix}"
+          suffix="${this.config.suffix}"
+          tooltip="${this.tooltip}"
+          icon="${icon ?? ""}"
+          picture="${picture ?? ""}"
+          color="${this.config.color}"
+          style="${this.config.css}"
+          size="${this.config.size}"
+          extra-css-classes="${extraCssClasses}"
+          tap-action='${JSON.stringify(this.config.tapAction)}'
+        ></map-card-entity-marker>
       `,
       iconSize: [this.config.size, this.config.size],
       className: ''
