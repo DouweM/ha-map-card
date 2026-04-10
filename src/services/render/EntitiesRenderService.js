@@ -111,7 +111,7 @@ export default class EntitiesRenderService {
       const radius = maxSize * 0.35;
 
       for (let i = 0; i < n; i++) {
-        const angle = (2 * Math.PI * i / n) - Math.PI / 2; // start from top
+        const angle = (2 * Math.PI * i / n) + Math.PI; // start from left
         const newOffset = {
           x: Math.round(Math.cos(angle) * radius),
           y: Math.round(Math.sin(angle) * radius)
