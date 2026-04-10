@@ -19614,9 +19614,6 @@ class EntitiesRenderService {
     });
     if (this.markerGrouping === "spread") {
       this._updateSpreadOffsets();
-    } else if (this._spreadDebugOnce !== true) {
-      this._spreadDebugOnce = true;
-      console.warn(`[ha-map-card] markerGrouping="${this.markerGrouping}", entities=${this.entities.length}`);
     }
     this.updateInitialView();
   }
@@ -19630,12 +19627,6 @@ class EntitiesRenderService {
       const key = `${latLng.lat.toFixed(5)},${latLng.lng.toFixed(5)}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(entity);
-    }
-
-    if (this._spreadDebugOnce2 !== true) {
-      this._spreadDebugOnce2 = true;
-      const groupSummary = [...groups.entries()].map(([k, v]) => `${k}(${v.map(e => e.id).join(',')})`).join(' | ');
-      console.warn(`[ha-map-card spread] ${groups.size} groups: ${groupSummary}`);
     }
 
     for (const group of groups.values()) {
