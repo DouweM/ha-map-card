@@ -1,4 +1,4 @@
-import {Map, LayerGroup, LatLngBounds} from "leaflet";
+import {Map as LeafletMap, LayerGroup, LatLngBounds} from "leaflet";
 import "leaflet.markercluster";
 import EntityConfig from "../../configs/EntityConfig";
 import Entity from "../../models/Entity";
@@ -18,7 +18,7 @@ export default class EntitiesRenderService {
   entityConfigs = [];
   /** @type {object} */
   hass;
-  /** @type {Map} */
+  /** @type {LeafletMap} */
   map;
   /** @type {boolean} */
   isDarkMode = false;

@@ -19551,7 +19551,7 @@ class EntitiesRenderService {
   entityConfigs = [];
   /** @type {object} */
   hass;
-  /** @type {Map} */
+  /** @type {LeafletMap} */
   map;
   /** @type {boolean} */
   isDarkMode = false;
@@ -19623,7 +19623,7 @@ class EntitiesRenderService {
 
   _updateSpreadOffsets() {
     // Group entities by proximity (within ~1 meter), excluding group: false entities
-    const groups = new leafletSrcExports.Map();
+    const groups = new Map();
     for (const entity of this.entities) {
       if (!entity.marker || entity.config.group === false) continue;
       const latLng = entity.latLng;
