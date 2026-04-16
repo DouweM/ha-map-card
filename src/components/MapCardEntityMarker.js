@@ -86,9 +86,10 @@ export default class MapCardEntityMarker extends LitElement {
         height: 48px;
         font-size: var(--ha-marker-font-size, 1.5em);
         border-radius: var(--ha-marker-border-radius, 50%);
-        border: 1px solid var(--ha-marker-color, var(--primary-color));
+        border: var(--ha-marker-border, 1px solid var(--ha-marker-color, var(--primary-color)));
         color: var(--primary-text-color);
         background-color: var(--card-background-color);
+        box-shadow: var(--ha-marker-box-shadow, none);
         position: relative;
       }
       .marker.picture {
