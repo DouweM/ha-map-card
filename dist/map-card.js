@@ -20593,6 +20593,8 @@ class MapCardEntityMarker extends i {
         color: var(--primary-text-color);
         background-color: var(--card-background-color);
         box-shadow: var(--ha-marker-box-shadow, none);
+        backdrop-filter: var(--ha-marker-backdrop-filter, none);
+        -webkit-backdrop-filter: var(--ha-marker-backdrop-filter, none);
         position: relative;
       }
       .marker.picture {
