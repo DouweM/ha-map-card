@@ -20521,10 +20521,11 @@ class MapCardEntityMarker extends i {
   }
 
   render() {
+    this.style.setProperty('--ha-marker-color', this.color);
     return b`
         <div
           class="marker ${this.picture ? "picture" : ""}  ${this.extraCssClasses ? this.extraCssClasses : ""}"
-          style="--ha-marker-color: ${this.color}; height: ${this.size}px; width: ${this.size}px;"
+          style="height: ${this.size}px; width: ${this.size}px;"
           @click=${this._badgeTap}
           title="${this.tooltip}"
           >
