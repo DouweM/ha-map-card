@@ -95,6 +95,18 @@ export default class MapCardEntityMarker extends LitElement {
       .marker.picture {
         overflow: hidden;
       }
+      .marker::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 1;
+        border: var(--ha-marker-overlay-border, none);
+        box-shadow: var(--ha-marker-overlay-shadow, none);
+        backdrop-filter: var(--ha-marker-overlay-backdrop-filter, none);
+        -webkit-backdrop-filter: var(--ha-marker-overlay-backdrop-filter, none);
+      }
       .entity-picture {
         background-size: cover;
         height: 100%;
