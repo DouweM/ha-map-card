@@ -20565,7 +20565,7 @@ class MapCardEntityMarker extends i {
       `;
     }
     if(this.icon) {
-      return b`<ha-icon icon="${this.icon}" style="--icon-primary-color: var(--ha-marker-icon-color, ${this.color}); --mdc-icon-size: ${this.size - 10}px;">icon</ha-icon>`
+      return b`<ha-icon icon="${this.icon}" style="--icon-primary-color: var(--ha-marker-icon-color, ${this.color}); --mdc-icon-size: ${this.size - 10}px; margin-top: -1px;">icon</ha-icon>`
     }
     if (!this.prefix && !this.suffix) {
       return this.title;
