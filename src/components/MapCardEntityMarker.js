@@ -18,7 +18,6 @@ export default class MapCardEntityMarker extends LitElement {
   }
 
   render() {
-    this.style.setProperty('--ha-marker-color', this.color);
     return html`
         <div
           class="marker ${this.picture ? "picture" : ""}  ${this.extraCssClasses ? this.extraCssClasses : ""}"

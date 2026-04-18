@@ -16222,7 +16222,7 @@ class Entity {
             icon="${icon ?? ""}"
             picture="${picture ?? ""}"
             color="${this.config.color}"
-            style="${this.config.css}"
+            style="--ha-marker-color: ${this.config.color}; ${this.config.css ?? ''}"
             size="${this.config.size}"
             extra-css-classes="${extraCssClasses}"
             tap-action='${JSON.stringify(this.config.tapAction)}'
@@ -20521,7 +20521,6 @@ class MapCardEntityMarker extends i {
   }
 
   render() {
-    this.style.setProperty('--ha-marker-color', this.color);
     return b`
         <div
           class="marker ${this.picture ? "picture" : ""}  ${this.extraCssClasses ? this.extraCssClasses : ""}"
