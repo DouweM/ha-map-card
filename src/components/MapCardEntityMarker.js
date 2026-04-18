@@ -21,7 +21,7 @@ export default class MapCardEntityMarker extends LitElement {
     return html`
         <div
           class="marker ${this.picture ? "picture" : ""}  ${this.extraCssClasses ? this.extraCssClasses : ""}"
-          style="border-color: ${this.color}; height: ${this.size}px; width: ${this.size}px;"
+          style="--ha-marker-color: ${this.color}; height: ${this.size}px; width: ${this.size}px;"
           @click=${this._badgeTap}
           title="${this.tooltip}"
           >
