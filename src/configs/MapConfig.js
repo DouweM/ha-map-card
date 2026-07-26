@@ -62,7 +62,9 @@ export default class MapConfig {
     this.cardSize = this._setConfigWithDefault(inputConfig.card_size, 5);
     this.mapOptions = this._setConfigWithDefault(inputConfig.map_options, {});
     // Optional group name; cards sharing it sync their pan/zoom (see ViewSyncStore).
-    this.syncGroup = this._setConfigWithDefault(inputConfig.sync_group, null);
+    // Read directly (not via _setConfigWithDefault, which treats a null default
+    // as "required" and would throw for every card that omits sync_group).
+    this.syncGroup = inputConfig.sync_group ?? null;
 
     // Get theme mode.
     this.themeMode = ['dark', 'light', 'auto'].includes(inputConfig.theme_mode) ? inputConfig.theme_mode : 'auto';
