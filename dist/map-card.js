@@ -16310,6 +16310,8 @@ class MapConfig {
   themeMode;
   /** @type {object} */
   mapOptions;
+  /** @type {string} */
+  syncGroup;
   /** @type {FocusFollowConfig} */
   focusFollow;
   /** @type {boolean} */
@@ -16327,6 +16329,8 @@ class MapConfig {
     this.zoom = this._setConfigWithDefault(inputConfig.zoom, 12);
     this.cardSize = this._setConfigWithDefault(inputConfig.card_size, 5);
     this.mapOptions = this._setConfigWithDefault(inputConfig.map_options, {});
+    // Optional group name; cards sharing it sync their pan/zoom (see ViewSyncStore).
+    this.syncGroup = this._setConfigWithDefault(inputConfig.sync_group, null);
 
     // Get theme mode.
     this.themeMode = ['dark', 'light', 'auto'].includes(inputConfig.theme_mode) ? inputConfig.theme_mode : 'auto';
@@ -19729,6 +19733,31 @@ class EntitiesRenderService {
   }
 }
 
+/**
+ * Shared map view state, keyed by a `sync_group` name.
+ *
+ * Cards that set the same `sync_group` share their center/zoom: panning or
+ * zooming one updates the store, and any other card in the group adopts that
+ * view when it is (re)created — e.g. when switching between dashboard tabs.
+ *
+ * The store lives in module scope, so it is re-created on every full page
+ * load. That means the synced view is intentionally forgotten on reload and
+ * each card falls back to its configured default position.
+ */
+
+const store = new Map();
+
+/** @returns {{center: L.LatLng, zoom: number}|undefined} */
+function getSharedView(group) {
+  return group ? store.get(group) : undefined;
+}
+
+function setSharedView(group, center, zoom) {
+  if (group) {
+    store.set(group, { center, zoom });
+  }
+}
+
 class InitialViewRenderService {
 
   hass;
@@ -19747,8 +19776,17 @@ class InitialViewRenderService {
 
   setup() {
     Logger.debug("[InitialViewRenderService] Setting up initial view");
+
+    // If another card in the same sync_group has already moved, adopt its view.
+    const shared = getSharedView(this.config.syncGroup);
+    if (shared) {
+      Logger.debug("[InitialViewRenderService] Adopting shared view from group " + this.config.syncGroup);
+      this.map.setView(shared.center, shared.zoom);
+      return;
+    }
+
     const latLng = this.getConfiguredLatLong(this.config, this.hass);
-    
+
     if (latLng) {
       Logger.debug("[InitialViewRenderService] Setting up initial view to " + latLng);
       this.map.setView(latLng, this.config.zoom);
@@ -20352,6 +20390,11 @@ class MapCard extends i {
     let layer = new TileLayer(tileUrl, this._config.tileLayer.options);
     map.addLayer(layer);
     this.urlResolver.registerLayer(layer, this._config.tileLayer.url);
+
+    // Share pan/zoom with other cards in the same sync_group.
+    if (this._config.syncGroup) {
+      map.on('moveend', () => setSharedView(this._config.syncGroup, map.getCenter(), map.getZoom()));
+    }
     return map;
   }
 

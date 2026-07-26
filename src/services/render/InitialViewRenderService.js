@@ -1,7 +1,8 @@
 import EntitiesRenderService from "./EntitiesRenderService";
 import Map from 'leaflet';
-import HaMapUtilities from '../../util/HaMapUtilities.js';  
+import HaMapUtilities from '../../util/HaMapUtilities.js';
 import Logger from "../../util/Logger.js";
+import { getSharedView } from "../ViewSyncStore.js";
 
 export default class InitialViewRenderService {
 
@@ -21,8 +22,17 @@ export default class InitialViewRenderService {
 
   setup() {
     Logger.debug("[InitialViewRenderService] Setting up initial view");
+
+    // If another card in the same sync_group has already moved, adopt its view.
+    const shared = getSharedView(this.config.syncGroup);
+    if (shared) {
+      Logger.debug("[InitialViewRenderService] Adopting shared view from group " + this.config.syncGroup);
+      this.map.setView(shared.center, shared.zoom);
+      return;
+    }
+
     const latLng = this.getConfiguredLatLong(this.config, this.hass);
-    
+
     if (latLng) {
       Logger.debug("[InitialViewRenderService] Setting up initial view to " + latLng);
       this.map.setView(latLng, this.config.zoom);

@@ -42,6 +42,8 @@ export default class MapConfig {
   themeMode;
   /** @type {object} */
   mapOptions;
+  /** @type {string} */
+  syncGroup;
   /** @type {FocusFollowConfig} */
   focusFollow;
   /** @type {boolean} */
@@ -59,6 +61,8 @@ export default class MapConfig {
     this.zoom = this._setConfigWithDefault(inputConfig.zoom, 12);
     this.cardSize = this._setConfigWithDefault(inputConfig.card_size, 5);
     this.mapOptions = this._setConfigWithDefault(inputConfig.map_options, {});
+    // Optional group name; cards sharing it sync their pan/zoom (see ViewSyncStore).
+    this.syncGroup = this._setConfigWithDefault(inputConfig.sync_group, null);
 
     // Get theme mode.
     this.themeMode = ['dark', 'light', 'auto'].includes(inputConfig.theme_mode) ? inputConfig.theme_mode : 'auto';

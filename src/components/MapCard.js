@@ -14,6 +14,7 @@ import InitialViewRenderService from '../services/render/InitialViewRenderServic
 import TileLayer from '../leaflet/TileLayer.js';
 import PluginsRenderService from '../services/render/PluginsRenderService.js';
 import GeoJsonRenderService from '../services/render/GeoJsonRenderService.js';
+import { setSharedView } from '../services/ViewSyncStore.js';
 
 export default class MapCard extends LitElement {
   static get properties() {
@@ -199,6 +200,11 @@ export default class MapCard extends LitElement {
     let layer = new TileLayer(tileUrl, this._config.tileLayer.options);
     map.addLayer(layer);
     this.urlResolver.registerLayer(layer, this._config.tileLayer.url);
+
+    // Share pan/zoom with other cards in the same sync_group.
+    if (this._config.syncGroup) {
+      map.on('moveend', () => setSharedView(this._config.syncGroup, map.getCenter(), map.getZoom()));
+    }
     return map;
   }
 
