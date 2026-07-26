@@ -20395,7 +20395,54 @@ class MapCard extends i {
     if (this._config.syncGroup) {
       map.on('moveend', () => setSharedView(this._config.syncGroup, map.getCenter(), map.getZoom()));
     }
+
+    this._setupDoubleTapZoom(map);
     return map;
+  }
+
+  /**
+   * Zoom in around the tapped/clicked point on double-click and double-tap.
+   *
+   * Leaflet's built-in doubleClickZoom already zooms around the point on
+   * desktop, but double-tap on touch (notably iOS) is unreliable, so we detect
+   * it manually and suppress any duplicate synthesized dblclick.
+   */
+  _setupDoubleTapZoom(map) {
+    if (map.options.doubleClickZoom === false) return;
+    map.doubleClickZoom.disable();
+
+    const zoomAround = (containerPoint) => {
+      const zoom = map.getZoom() + (map.options.zoomDelta || 1);
+      if (map.options.doubleClickZoom === 'center') {
+        map.setZoom(zoom);
+      } else {
+        map.setZoomAround(containerPoint, zoom);
+      }
+    };
+
+    let suppressClickUntil = 0;
+    map.on('dblclick', (e) => {
+      if (Date.now() < suppressClickUntil) return; // already handled as a tap
+      zoomAround(e.containerPoint);
+    });
+
+    let lastTapTime = 0;
+    let lastTapPoint = null;
+    map.getContainer().addEventListener('touchend', (ev) => {
+      if (ev.touches.length !== 0 || ev.changedTouches.length !== 1) return;
+      const point = map.mouseEventToContainerPoint(ev.changedTouches[0]);
+      const now = Date.now();
+      if (now - lastTapTime < 300 && lastTapPoint && point.distanceTo(lastTapPoint) < 40) {
+        ev.preventDefault();
+        suppressClickUntil = now + 500;
+        zoomAround(point);
+        lastTapTime = 0;
+        lastTapPoint = null;
+      } else {
+        lastTapTime = now;
+        lastTapPoint = point;
+      }
+    }, { passive: false });
   }
 
 
