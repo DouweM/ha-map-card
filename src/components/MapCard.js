@@ -27,6 +27,7 @@ export default class MapCard extends LitElement {
   setupNeeded = true;
   /** @type {L.Map} */
   map;
+  /** @type {ResizeObserver} */
   resizeObserver;
   /** @type {HaHistoryService} */
   historyService;
@@ -58,10 +59,7 @@ export default class MapCard extends LitElement {
 
     // Clean up existing map instance before reinitializing (e.g. when setConfig triggers a re-setup)
     if (this.map) {
-      this.resizeObserver?.disconnect();
-      this.resizeObserver = undefined;
-      this.map.remove();
-      this.map = undefined;
+      this._teardown();
     }
 
     this.themeMode = this._config.themeMode;
@@ -90,7 +88,6 @@ export default class MapCard extends LitElement {
       this.initialViewRenderService.setup();
 
       this.setupNeeded = false;
-      this.render();
       this.hasError = false;
     } catch (e) {
       this.hasError = true;
@@ -102,19 +99,22 @@ export default class MapCard extends LitElement {
   }
 
   firstUpdated() {
-    this.setup();
+    if (this.hass) {
+      this.setup();
+    }
   };
 
   render() {
 
+    if (this.setupNeeded && this.hass && this.shadowRoot?.querySelector('#map')) {
+      this.setup();
+    }
+
     if (this.map) {
-      if (this.setupNeeded) {
-        this.setup();
-      }
       this.pluginsRenderService.render();
       this.tileLayersService.render();
       this.geoJsonRenderService.render(this.hass);
-      this.entitiesRenderService.render();
+      this.entitiesRenderService.render(this.hass);
       this.initialViewRenderService.render();
 
       if (!this.hasError && this.hadError) {
@@ -130,7 +130,7 @@ export default class MapCard extends LitElement {
             <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
             <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
             <ha-card header="${this._config.title}">
-              <div id="mapContainer">
+              <div id="mapContainer" style="min-height: ${this._config.mapHeight}px">
                 <div id="map" style="min-height: ${this._config.mapHeight}px">
                   <ha-icon-button
                     label='Reset focus'
@@ -173,7 +173,6 @@ export default class MapCard extends LitElement {
       for (let entry of entries) {
         if (entry.target === this.map?.getContainer()) {
           this.map?.invalidateSize();
-          this.initialViewRenderService?.setup();
         }
       }
     });
@@ -196,10 +195,12 @@ export default class MapCard extends LitElement {
     // Add dark class if darkmode
     this._isDarkMode() ? mapEl.classList.add('dark') : mapEl.classList.add('light');
 
-    let tileUrl = this.urlResolver.resolveUrl(this._config.tileLayer.url);
-    let layer = new TileLayer(tileUrl, this._config.tileLayer.options);
-    map.addLayer(layer);
-    this.urlResolver.registerLayer(layer, this._config.tileLayer.url);
+    if (this._config.tileLayer) {
+      let tileUrl = this.urlResolver.resolveUrl(this._config.tileLayer.url);
+      let layer = new TileLayer(tileUrl, this._config.tileLayer.options);
+      map.addLayer(layer);
+      this.urlResolver.registerLayer(layer, this._config.tileLayer.url);
+    }
 
     // Share pan/zoom with other cards in the same sync_group.
     if (this._config.syncGroup) {
@@ -272,27 +273,31 @@ export default class MapCard extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     Logger.debug("[MapCard.connectedCallback] called");
-    // Reinitialize the map when the card gets reloaded but it's still in view
-    if (this.shadowRoot.querySelector('#map')) {
-      this.setup();
+    if (this.setupNeeded) {
+      this.requestUpdate();
     }
+  }
+
+  _teardown() {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = undefined;
+    this.historyService?.unsubscribe();
+    this.dateRangeManager?.disconnect();
+    this.linkedEntityService?.disconnect();
+    this.pluginsRenderService?.cleanup();
+    this.geoJsonRenderService?.cleanup();
+    this.entitiesRenderService?.cleanup();
+    this.map.remove();
+    this.map = undefined;
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     Logger.debug("[MapCard.disconnectedCallback] called");
     if (this.map) {
-      this.map.remove();
-      this.map = undefined;
+      this._teardown();
       this.setupNeeded = true;
     }
-
-    this.resizeObserver?.unobserve(this);
-    this.historyService?.unsubscribe();
-    this.dateRangeManager?.disconnect();
-    this.linkedEntityService?.disconnect();
-    this.pluginsRenderService?.cleanup();
-    this.geoJsonRenderService?.cleanup();
   }
 
   _isDarkMode() {

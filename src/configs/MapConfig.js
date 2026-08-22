@@ -1,3 +1,4 @@
+import L from 'leaflet';
 import EntityConfig from "./EntityConfig.js";
 import PluginConfig from "./PluginConfig.js";
 import TileLayerConfig from "./TileLayerConfig.js";
@@ -46,8 +47,8 @@ export default class MapConfig {
   syncGroup;
   /** @type {FocusFollowConfig} */
   focusFollow;
-  /** @type {boolean} */
-  clusterMarkers;
+  /** @type {string} */
+  markerGrouping;
 
   /** @type {boolean} */
   debug = false;
@@ -55,12 +56,12 @@ export default class MapConfig {
   constructor(inputConfig) {
     this.title = inputConfig.title;
     this.focusEntity = inputConfig.focus_entity;
-    this.focusFollow = new FocusFollowConfig(inputConfig.focus_follow);
+    this.focusFollow = new FocusFollowConfig(inputConfig.focus_follow, inputConfig.focus_follow_pause);
     this.x = inputConfig.x;
     this.y = inputConfig.y;
     this.zoom = this._setConfigWithDefault(inputConfig.zoom, 12);
     this.cardSize = this._setConfigWithDefault(inputConfig.card_size, 5);
-    this.mapOptions = this._setConfigWithDefault(inputConfig.map_options, {});
+    this.mapOptions = this._normalizeMapOptions(this._setConfigWithDefault(inputConfig.map_options, {}));
     // Optional group name; cards sharing it sync their pan/zoom (see ViewSyncStore).
     // Read directly (not via _setConfigWithDefault, which treats a null default
     // as "required" and would throw for every card that omits sync_group).
@@ -79,7 +80,7 @@ export default class MapConfig {
       this.markerGrouping = "none";
     }
 
-    // Enable debug messaging. 
+    // Enable debug messaging.
     // Card is quite chatty with this enabled.
     if (inputConfig.debug){
       Logger.enableDebug();
@@ -87,7 +88,7 @@ export default class MapConfig {
 
     // Default historyStart/historyEnd can be set at the top level.
     // Entities can override these dates on an individual basis.
-    // 
+    //
     // If historyDateSelection is true, this replaces top level date functionality (and any entities that don't provide their own dates will also use this)
     this.historyDateSelection = inputConfig.history_date_selection ? true : false;
     if (this.historyDateSelection) {
@@ -134,12 +135,15 @@ export default class MapConfig {
       return new PluginConfig(plugin.hacs, plugin.url, plugin.name, plugin.options);
     });
 
-    this.tileLayer = new TileLayerConfig(
-      this._setConfigWithDefault(inputConfig.tile_layer_url, "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-      this._setConfigWithDefault(inputConfig.tile_layer_options, {}),
-      null, // Default layer doesn't pass history by default.
-      this._setConfigWithDefault(inputConfig.tile_layer_attribution, '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>')
-    );
+    const tileLayerUrl = this._setConfigWithDefault(inputConfig.tile_layer_url, "https://tile.openstreetmap.org/{z}/{x}/{y}.png");
+    this.tileLayer = tileLayerUrl
+      ? new TileLayerConfig(
+          tileLayerUrl,
+          this._setConfigWithDefault(inputConfig.tile_layer_options, {}),
+          null, // Default layer doesn't pass history by default.
+          this._setConfigWithDefault(inputConfig.tile_layer_attribution, '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>')
+        )
+      : null;
     if(!(Number.isFinite(this.x) && Number.isFinite(this.y)) && this.focusEntity == null && this.entities.length == 0) {
       throw new Error("We need a map latitude & longitude; set at least [x, y], a focus_entity or have at least 1 entities defined.");
     }
@@ -148,13 +152,24 @@ export default class MapConfig {
 
   _setConfigWithDefault(input, d = null) {
     if (input === undefined || input === null) {
-      if (d === null) {
+      if (d == null) {
         throw new Error("Missing key ");
       }
       return d;
     } else {
       return input;
     }
+  }
+
+  _normalizeMapOptions(mapOptions) {
+    if (mapOptions?.crs === 'simple') {
+      return {
+        ...mapOptions,
+        crs: L.CRS.Simple,
+      };
+    }
+
+    return mapOptions;
   }
 
   /** @returns {boolean} if there is a title */
@@ -170,7 +185,7 @@ export default class MapConfig {
       return (this.cardSize * 50) + 20;
     }
   }
-  
+
   /** @returns {[EntityConfig]} */
   get entitiesWithShowPath() {
     return this.entities.filter((ent) => ent.showPath);
