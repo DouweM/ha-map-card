@@ -168,7 +168,7 @@ export default class EntitiesRenderService {
     for (const group of groups.values()) {
       if (group.length <= 1) {
         // Single entity — clear any previous offset
-        if (group[0]._spreadOffset) {
+        if (group[0]._spreadOffset || group[0]._spreadApplied) {
           group[0]._spreadOffset = null;
           group[0]._updateMarkerIcon();
         }
@@ -186,9 +186,12 @@ export default class EntitiesRenderService {
           y: Math.round(Math.sin(angle) * radius)
         };
 
-        const prev = group[i]._spreadOffset;
+        // Compare against what actually landed on the marker, not what was last
+        // asked for: on a cold load the DOM node may not exist yet, and keying off
+        // the intent would record the offset as handled and never come back.
+        const prev = group[i]._spreadApplied;
+        group[i]._spreadOffset = newOffset;
         if (!prev || prev.x !== newOffset.x || prev.y !== newOffset.y) {
-          group[i]._spreadOffset = newOffset;
           group[i]._updateMarkerIcon();
         }
       }

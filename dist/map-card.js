@@ -16332,12 +16332,32 @@ class Entity {
   _updateMarkerIcon() {
     if (!this.marker) return;
     const el = this.marker.getElement();
-    if (!el) return;
-    const wrapper = el.querySelector('.spread-wrapper');
-    if (!wrapper) return;
+    const wrapper = el?.querySelector('.spread-wrapper');
+    if (!wrapper) {
+      // The marker is not in the DOM yet - on a cold page load the map is still
+      // being laid out when the offsets are first computed. Giving up here used to
+      // strand the markers on top of each other for the life of the card, because
+      // _updateSpreadOffsets only calls back when an offset CHANGES and this one
+      // had already been recorded. Come back next frame instead.
+      if (this._spreadRetries === undefined) this._spreadRetries = 0;
+      if (this._spreadRetries < 60 && typeof requestAnimationFrame === "function") {
+        this._spreadRetries++;
+        if (!this._spreadRetryHandle) {
+          this._spreadRetryHandle = requestAnimationFrame(() => {
+            this._spreadRetryHandle = null;
+            this._updateMarkerIcon();
+          });
+        }
+      }
+      return;
+    }
+    this._spreadRetries = 0;
     const offsetX = this._spreadOffset?.x ?? 0;
     const offsetY = this._spreadOffset?.y ?? 0;
     wrapper.style.transform = (offsetX || offsetY) ? `translate(${offsetX}px, ${offsetY}px)` : '';
+    // Record what actually reached the screen, not merely what was intended, so a
+    // failed application is retried rather than cached as done.
+    this._spreadApplied = { x: offsetX, y: offsetY };
   }
 
   _createIcon() {
@@ -16372,9 +16392,16 @@ class Entity {
     const boxH = pillH + off;
     const callout = placeIcon != null && this.map.getZoom() >= this.config.pillCalloutMinZoom;
 
+    // Carry any spread offset in the markup itself, so a marker that gets recreated
+    // (a title or place change) is born already fanned out instead of snapping back
+    // under its neighbour until the next offset change.
+    const spreadX = this._spreadOffset?.x ?? 0;
+    const spreadY = this._spreadOffset?.y ?? 0;
+    const spreadStyle = (spreadX || spreadY) ? ` style="transform: translate(${spreadX}px, ${spreadY}px);"` : '';
+
     return new leafletSrcExports.DivIcon({
       html: `
-        <div class="spread-wrapper">
+        <div class="spread-wrapper"${spreadStyle}>
           <map-card-entity-marker
             entity-id="${this.id}"
             title="${this.title}"
@@ -19912,7 +19939,7 @@ class EntitiesRenderService {
     for (const group of groups.values()) {
       if (group.length <= 1) {
         // Single entity — clear any previous offset
-        if (group[0]._spreadOffset) {
+        if (group[0]._spreadOffset || group[0]._spreadApplied) {
           group[0]._spreadOffset = null;
           group[0]._updateMarkerIcon();
         }
@@ -19930,9 +19957,12 @@ class EntitiesRenderService {
           y: Math.round(Math.sin(angle) * radius)
         };
 
-        const prev = group[i]._spreadOffset;
+        // Compare against what actually landed on the marker, not what was last
+        // asked for: on a cold load the DOM node may not exist yet, and keying off
+        // the intent would record the offset as handled and never come back.
+        const prev = group[i]._spreadApplied;
+        group[i]._spreadOffset = newOffset;
         if (!prev || prev.x !== newOffset.x || prev.y !== newOffset.y) {
-          group[i]._spreadOffset = newOffset;
           group[i]._updateMarkerIcon();
         }
       }

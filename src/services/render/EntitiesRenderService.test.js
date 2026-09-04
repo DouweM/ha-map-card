@@ -386,4 +386,72 @@ function testDataToMarker(testData, focusOnFit = true) {
       },
     };
   });
-}});
+}
+  describe("_updateSpreadOffsets", () => {
+    const at = (lat, lng, size = 48) => ({
+      latLng: latLng(lat, lng),
+      marker: {},
+      config: { size, group: true },
+      _spreadOffset: null,
+      _spreadApplied: null,
+      _updateMarkerIcon: jest.fn(),
+    });
+
+    const service = (entities) => {
+      const s = new EntitiesRenderService({}, {}, new FocusFollowConfig("none"), [], {}, {}, {}, false, "spread");
+      s.entities = entities;
+      return s;
+    };
+
+    it("retries co-located markers whose offset never reached the DOM", () => {
+      // A cold page load: the offsets are computed while the map is still being
+      // laid out, so _updateMarkerIcon cannot find the element and applies nothing.
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.1);
+      const s = service([a, b]);
+
+      s._updateSpreadOffsets();
+      expect(a._updateMarkerIcon).toHaveBeenCalledTimes(1);
+      expect(a._spreadOffset).not.toBeNull();
+      expect(a._spreadApplied).toBeNull(); // nothing landed
+
+      // Second pass, same positions. Keying off the intent would skip these forever;
+      // keying off what was applied must try again.
+      s._updateSpreadOffsets();
+      expect(a._updateMarkerIcon).toHaveBeenCalledTimes(2);
+      expect(b._updateMarkerIcon).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops re-applying once the offset is actually on the marker", () => {
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.1);
+      const s = service([a, b]);
+      // Simulate a successful application, as _updateMarkerIcon does when the
+      // element exists.
+      const land = (e) => e._updateMarkerIcon.mockImplementation(() => {
+        e._spreadApplied = { x: e._spreadOffset.x, y: e._spreadOffset.y };
+      });
+      land(a); land(b);
+
+      s._updateSpreadOffsets();
+      s._updateSpreadOffsets();
+
+      expect(a._updateMarkerIcon).toHaveBeenCalledTimes(1);
+      expect(b._updateMarkerIcon).toHaveBeenCalledTimes(1);
+    });
+
+    it("separates two markers in the same spot", () => {
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.1);
+      service([a, b])._updateSpreadOffsets();
+      expect(a._spreadOffset).not.toEqual(b._spreadOffset);
+    });
+
+    it("leaves a lone marker unoffset", () => {
+      const solo = at(19.4, -99.1);
+      service([solo])._updateSpreadOffsets();
+      expect(solo._spreadOffset).toBeNull();
+      expect(solo._updateMarkerIcon).not.toHaveBeenCalled();
+    });
+  });
+});
