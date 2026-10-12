@@ -343,6 +343,33 @@ export default class MapCard extends LitElement {
       #map {
         height: 100%;
       }
+      /* Leaflet's own positioning, copied from leaflet.css 1.9.4 (resync it on an
+         upgrade) so it applies before that stylesheet loads. Until it
+         does, tiles sit in normal flow and stretch the map; Leaflet then
+         sizes the view to the taller map and loads more tiles, which stretch it
+         again, so on a slow load a card can grow to thousands of pixels. */
+      .leaflet-container {
+        overflow: hidden;
+      }
+      .leaflet-pane,
+      .leaflet-layer,
+      .leaflet-tile-container,
+      .leaflet-tile,
+      .leaflet-marker-icon,
+      .leaflet-marker-shadow,
+      .leaflet-image-layer,
+      .leaflet-pane > svg,
+      .leaflet-pane > canvas {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      .leaflet-tile {
+        visibility: hidden;
+      }
+      .leaflet-tile-loaded {
+        visibility: inherit;
+      }
       .leaflet-pane {
         z-index: 0 !important;
       }
