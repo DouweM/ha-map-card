@@ -18,7 +18,7 @@ const store = new Map();
 // Forget a synced view this long after it was last set.
 const TTL_MS = 10 * 60 * 1000;
 
-/** @returns {{center: L.LatLng, zoom: number}|undefined} */
+/** @returns {{center: L.LatLng, zoom: number, movedAt: number|undefined}|undefined} */
 export function getSharedView(group) {
   if (!group) {
     return undefined;
@@ -31,11 +31,19 @@ export function getSharedView(group) {
     store.delete(group);
     return undefined;
   }
-  return { center: entry.center, zoom: entry.zoom };
+  return { center: entry.center, zoom: entry.zoom, movedAt: entry.movedAt };
 }
 
-export function setSharedView(group, center, zoom) {
+/**
+ * Record a group's view. `byUser` is false for a move the card made itself (a
+ * fit to its entities, or adopting this very view), which keeps the view but
+ * not the moment: `movedAt` is when somebody last moved the map by hand, so a
+ * card that adopts the view can hold off `focus_follow` from then on.
+ */
+export function setSharedView(group, center, zoom, byUser = true) {
   if (group) {
-    store.set(group, { center, zoom, time: Date.now() });
+    const now = Date.now();
+    const movedAt = byUser ? now : store.get(group)?.movedAt;
+    store.set(group, { center, zoom, time: now, movedAt });
   }
 }

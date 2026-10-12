@@ -114,6 +114,31 @@ export default class EntitiesRenderService {
     this.map.on('zoomend', this._scheduleResume);
   }
 
+  /**
+   * Hold off focus_follow for what is left of its pause after a move made at
+   * `movedAt` (epoch ms) -- somebody moving another card in the same
+   * sync_group, whose view this one has just taken up.
+   * @param {number|undefined} movedAt
+   */
+  pauseFollowSince(movedAt) {
+    if (movedAt === undefined || this.focusFollowConfig.isNone || !this.focusFollowConfig.hasPause) {
+      return;
+    }
+    const remaining = movedAt + this.focusFollowConfig.pauseMilliseconds - Date.now();
+    if (remaining <= 0) {
+      return;
+    }
+    this.isFollowPaused = true;
+    if (this._followPauseTimer) {
+      clearTimeout(this._followPauseTimer);
+    }
+    this._followPauseTimer = setTimeout(() => {
+      this.isFollowPaused = false;
+      this._followPauseTimer = null;
+      this.updateInitialView();
+    }, remaining);
+  }
+
   cleanup() {
     if (this._followPauseTimer) {
       clearTimeout(this._followPauseTimer);

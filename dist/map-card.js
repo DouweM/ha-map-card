@@ -19898,6 +19898,31 @@ class EntitiesRenderService {
     this.map.on('zoomend', this._scheduleResume);
   }
 
+  /**
+   * Hold off focus_follow for what is left of its pause after a move made at
+   * `movedAt` (epoch ms) -- somebody moving another card in the same
+   * sync_group, whose view this one has just taken up.
+   * @param {number|undefined} movedAt
+   */
+  pauseFollowSince(movedAt) {
+    if (movedAt === undefined || this.focusFollowConfig.isNone || !this.focusFollowConfig.hasPause) {
+      return;
+    }
+    const remaining = movedAt + this.focusFollowConfig.pauseMilliseconds - Date.now();
+    if (remaining <= 0) {
+      return;
+    }
+    this.isFollowPaused = true;
+    if (this._followPauseTimer) {
+      clearTimeout(this._followPauseTimer);
+    }
+    this._followPauseTimer = setTimeout(() => {
+      this.isFollowPaused = false;
+      this._followPauseTimer = null;
+      this.updateInitialView();
+    }, remaining);
+  }
+
   cleanup() {
     if (this._followPauseTimer) {
       clearTimeout(this._followPauseTimer);
@@ -20161,7 +20186,7 @@ const store = new Map();
 // Forget a synced view this long after it was last set.
 const TTL_MS = 10 * 60 * 1000;
 
-/** @returns {{center: L.LatLng, zoom: number}|undefined} */
+/** @returns {{center: L.LatLng, zoom: number, movedAt: number|undefined}|undefined} */
 function getSharedView(group) {
   if (!group) {
     return undefined;
@@ -20174,12 +20199,20 @@ function getSharedView(group) {
     store.delete(group);
     return undefined;
   }
-  return { center: entry.center, zoom: entry.zoom };
+  return { center: entry.center, zoom: entry.zoom, movedAt: entry.movedAt };
 }
 
-function setSharedView(group, center, zoom) {
+/**
+ * Record a group's view. `byUser` is false for a move the card made itself (a
+ * fit to its entities, or adopting this very view), which keeps the view but
+ * not the moment: `movedAt` is when somebody last moved the map by hand, so a
+ * card that adopts the view can hold off `focus_follow` from then on.
+ */
+function setSharedView(group, center, zoom, byUser = true) {
   if (group) {
-    store.set(group, { center, zoom, time: Date.now() });
+    const now = Date.now();
+    const movedAt = byUser ? now : store.get(group)?.movedAt;
+    store.set(group, { center, zoom, time: now, movedAt });
   }
 }
 
@@ -20231,7 +20264,15 @@ class InitialViewRenderService {
     const shared = getSharedView(this.config.syncGroup);
     if (shared) {
       Logger.debug("[InitialViewRenderService] Adopting shared view from group " + this.config.syncGroup);
+      // Taking up the group's view is not somebody moving this map.
+      this.entitiesRenderService._isAutoFitting = true;
+      this.map.once('moveend', () => {
+        this.entitiesRenderService._isAutoFitting = false;
+      });
       this.map.setView(shared.center, shared.zoom);
+      // But it is where somebody left the map, so it gets the same grace from
+      // focus_follow as if they had just moved this one.
+      this.entitiesRenderService.pauseFollowSince(shared.movedAt);
       return;
     }
 
@@ -20239,6 +20280,14 @@ class InitialViewRenderService {
 
     if (latLng) {
       Logger.debug("[InitialViewRenderService] Setting up initial view to " + latLng);
+      // The configured view is the card's own doing, not a move to share as
+      // somebody's.
+      if (this.entitiesRenderService) {
+        this.entitiesRenderService._isAutoFitting = true;
+        this.map.once?.('moveend', () => {
+          this.entitiesRenderService._isAutoFitting = false;
+        });
+      }
       this.map.setView(latLng, this.config.zoom);
       return;
     }
@@ -20812,7 +20861,15 @@ class MapCard extends i {
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {
         if (entry.target === this.map?.getContainer()) {
-          this.map?.invalidateSize();
+          // A resize moves the map (synchronously), but nobody moved it.
+          const service = this.entitiesRenderService;
+          const was = service?._isAutoFitting;
+          if (service) service._isAutoFitting = true;
+          try {
+            this.map?.invalidateSize();
+          } finally {
+            if (service) service._isAutoFitting = was;
+          }
         }
       }
     });
@@ -20844,7 +20901,12 @@ class MapCard extends i {
 
     // Share pan/zoom with other cards in the same sync_group.
     if (this._config.syncGroup) {
-      map.on('moveend', () => setSharedView(this._config.syncGroup, map.getCenter(), map.getZoom()));
+      map.on('moveend', () => setSharedView(
+        this._config.syncGroup,
+        map.getCenter(),
+        map.getZoom(),
+        !this.entitiesRenderService?._isAutoFitting,
+      ));
     }
 
     this._setupDoubleTapZoom(map);

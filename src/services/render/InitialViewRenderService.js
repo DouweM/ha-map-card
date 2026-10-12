@@ -52,7 +52,15 @@ export default class InitialViewRenderService {
     const shared = getSharedView(this.config.syncGroup);
     if (shared) {
       Logger.debug("[InitialViewRenderService] Adopting shared view from group " + this.config.syncGroup);
+      // Taking up the group's view is not somebody moving this map.
+      this.entitiesRenderService._isAutoFitting = true;
+      this.map.once('moveend', () => {
+        this.entitiesRenderService._isAutoFitting = false;
+      });
       this.map.setView(shared.center, shared.zoom);
+      // But it is where somebody left the map, so it gets the same grace from
+      // focus_follow as if they had just moved this one.
+      this.entitiesRenderService.pauseFollowSince(shared.movedAt);
       return;
     }
 
@@ -60,6 +68,14 @@ export default class InitialViewRenderService {
 
     if (latLng) {
       Logger.debug("[InitialViewRenderService] Setting up initial view to " + latLng);
+      // The configured view is the card's own doing, not a move to share as
+      // somebody's.
+      if (this.entitiesRenderService) {
+        this.entitiesRenderService._isAutoFitting = true;
+        this.map.once?.('moveend', () => {
+          this.entitiesRenderService._isAutoFitting = false;
+        });
+      }
       this.map.setView(latLng, this.config.zoom);
       return;
     }

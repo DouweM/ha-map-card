@@ -172,7 +172,15 @@ export default class MapCard extends LitElement {
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {
         if (entry.target === this.map?.getContainer()) {
-          this.map?.invalidateSize();
+          // A resize moves the map (synchronously), but nobody moved it.
+          const service = this.entitiesRenderService;
+          const was = service?._isAutoFitting;
+          if (service) service._isAutoFitting = true;
+          try {
+            this.map?.invalidateSize();
+          } finally {
+            if (service) service._isAutoFitting = was;
+          }
         }
       }
     });
@@ -204,7 +212,12 @@ export default class MapCard extends LitElement {
 
     // Share pan/zoom with other cards in the same sync_group.
     if (this._config.syncGroup) {
-      map.on('moveend', () => setSharedView(this._config.syncGroup, map.getCenter(), map.getZoom()));
+      map.on('moveend', () => setSharedView(
+        this._config.syncGroup,
+        map.getCenter(),
+        map.getZoom(),
+        !this.entitiesRenderService?._isAutoFitting,
+      ));
     }
 
     this._setupDoubleTapZoom(map);

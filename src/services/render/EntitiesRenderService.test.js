@@ -185,6 +185,43 @@ describe("EntitiesRenderService", () => {
     expect(map.fitBounds).toBeCalled();
   });
 
+  describe("pauseFollowSince", () => {
+    const serviceWith = (focusFollow) => {
+      const map = { setView: jest.fn(), fitBounds: jest.fn(), once: jest.fn(), on: jest.fn(),
+        getBounds: jest.fn().mockReturnValue({contains: jest.fn().mockReturnValue(false)}) };
+      const service = new EntitiesRenderService(map, {}, focusFollow, [], {}, {}, {}, false);
+      service.entities = testDataToMarker([[1.1, 2.1], [2.1, 3.1]]);
+      return { map, service };
+    };
+
+    it("holds off following for the rest of the pause after the move", () => {
+      jest.useFakeTimers();
+      const { map, service } = serviceWith(new FocusFollowConfig("contains", 60));
+      service.pauseFollowSince(Date.now() - 20 * 1000);
+      service.updateInitialView();
+      expect(map.fitBounds).not.toBeCalled();
+
+      jest.advanceTimersByTime(40 * 1000);
+      expect(service.isFollowPaused).toBe(false);
+      expect(map.fitBounds).toBeCalled();
+      jest.useRealTimers();
+    });
+
+    it("does nothing once the pause has run out, or without one", () => {
+      const late = serviceWith(new FocusFollowConfig("contains", 60)).service;
+      late.pauseFollowSince(Date.now() - 61 * 1000);
+      expect(late.isFollowPaused).toBe(false);
+
+      const unpaused = serviceWith(new FocusFollowConfig("contains")).service;
+      unpaused.pauseFollowSince(Date.now());
+      expect(unpaused.isFollowPaused).toBe(false);
+
+      const never = serviceWith(new FocusFollowConfig("contains", 60)).service;
+      never.pauseFollowSince(undefined);
+      expect(never.isFollowPaused).toBe(false);
+    });
+  });
+
   describe("_focusPadding", () => {
     const paddingFor = (value, size = {x: 400, y: 300}) => {
       const container = document.createElement("div");
