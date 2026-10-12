@@ -259,7 +259,7 @@ export default class EntitiesRenderService {
     this.map.once('moveend', () => {
       this._isAutoFitting = false;
     });
-    this.map.fitBounds(bounds);
+    this.map.fitBounds(bounds, this.focusFollowConfig?.fitOptions ?? {});
     Logger.debug("[EntitiesRenderService.updateInitialView]: Updating bounds to: " + points.join(","));
   }
 
@@ -274,7 +274,7 @@ export default class EntitiesRenderService {
     this.map.once('moveend', () => {
       this._isAutoFitting = false;
     });
-    this.map.fitBounds(bounds);
+    this.map.fitBounds(bounds, this.focusFollowConfig?.fitOptions ?? {});
     Logger.debug("[EntitiesRenderService.setInitialView]: Setting initial view to: " + points.join(","));
   }
 }

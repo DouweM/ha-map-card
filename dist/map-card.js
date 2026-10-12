@@ -16465,10 +16465,18 @@ class FocusFollowConfig {
    */
   pauseSeconds = 0;
 
-  constructor(config, pauseSeconds) {
+  /**
+   * The closest a fit to the entities may zoom in; undefined for the map's own maximum.
+   * @type {number|undefined}
+   */
+  maxZoom = undefined;
+
+  constructor(config, pauseSeconds, maxZoom) {
     this.selection = ['refocus', 'contains', 'none' ].includes(config) ? config : "none";
     const parsedPauseSeconds = Number(pauseSeconds);
     this.pauseSeconds = (!isNaN(parsedPauseSeconds) && parsedPauseSeconds > 0) ? parsedPauseSeconds : 0;
+    const parsedMaxZoom = Number(maxZoom);
+    this.maxZoom = (maxZoom != null && !isNaN(parsedMaxZoom)) ? parsedMaxZoom : undefined;
     Logger.debug(`[FocusFollowConfig]: Setting up focus follow config with selection ${this.selection}, pauseSeconds ${this.pauseSeconds}`);
   }
 
@@ -16486,6 +16494,11 @@ class FocusFollowConfig {
 
   get hasPause() {
     return this.pauseSeconds > 0;
+  }
+
+  /** @returns {object} options for Leaflet's fitBounds */
+  get fitOptions() {
+    return this.maxZoom === undefined ? {} : { maxZoom: this.maxZoom };
   }
 
   get pauseMilliseconds() {
@@ -16541,7 +16554,7 @@ class MapConfig {
   constructor(inputConfig) {
     this.title = inputConfig.title;
     this.focusEntity = inputConfig.focus_entity;
-    this.focusFollow = new FocusFollowConfig(inputConfig.focus_follow, inputConfig.focus_follow_pause);
+    this.focusFollow = new FocusFollowConfig(inputConfig.focus_follow, inputConfig.focus_follow_pause, inputConfig.focus_max_zoom);
     this.x = inputConfig.x;
     this.y = inputConfig.y;
     this.zoom = this._setConfigWithDefault(inputConfig.zoom, 12);
@@ -20030,7 +20043,7 @@ class EntitiesRenderService {
     this.map.once('moveend', () => {
       this._isAutoFitting = false;
     });
-    this.map.fitBounds(bounds);
+    this.map.fitBounds(bounds, this.focusFollowConfig?.fitOptions ?? {});
     Logger.debug("[EntitiesRenderService.updateInitialView]: Updating bounds to: " + points.join(","));
   }
 
@@ -20045,7 +20058,7 @@ class EntitiesRenderService {
     this.map.once('moveend', () => {
       this._isAutoFitting = false;
     });
-    this.map.fitBounds(bounds);
+    this.map.fitBounds(bounds, this.focusFollowConfig?.fitOptions ?? {});
     Logger.debug("[EntitiesRenderService.setInitialView]: Setting initial view to: " + points.join(","));
   }
 }

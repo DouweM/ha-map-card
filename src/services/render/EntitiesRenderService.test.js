@@ -53,7 +53,22 @@ describe("EntitiesRenderService", () => {
       entitiesRenderService.entities = testDataToMarker(testData);
 
       entitiesRenderService.setInitialView();
-      expect(map.fitBounds).toBeCalledWith({"_northEast": {"lat": 2.2, "lng": 3.9000000000000004}, "_southWest": {"lat": 1, "lng": -5.7}});
+      expect(map.fitBounds).toBeCalledWith({"_northEast": {"lat": 2.2, "lng": 3.9000000000000004}, "_southWest": {"lat": 1, "lng": -5.7}}, {});
+    });
+
+    it("zooms no closer than focus_max_zoom", () => {
+      const map = {
+        setView: jest.fn(),
+        fitBounds: jest.fn(),
+        once: jest.fn(),
+      };
+      const focusFollow = new FocusFollowConfig("contains", 0, 16);
+      const entitiesRenderService = new EntitiesRenderService(map, {}, focusFollow, [], {}, {}, {}, false);
+      // Everyone in one spot: an empty bounds, which Leaflet fits at its maximum zoom.
+      entitiesRenderService.entities = testDataToMarker([[40.7617, -73.988], [40.7617, -73.988]]);
+
+      entitiesRenderService.setInitialView();
+      expect(map.fitBounds).toBeCalledWith(expect.anything(), { maxZoom: 16 });
     });
   });
 
