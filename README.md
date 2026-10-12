@@ -84,6 +84,8 @@ entities:
 
 If `x` & `y` or `focus_entity` is not set it will take the lat/long from the __first entity__.
 
+When something is laid over part of the map, set the `--map-card-focus-padding` CSS property on the card (with card-mod, for instance) to keep fitted entities out from under it. It takes one to four pixel lengths in the order of CSS `padding`, e.g. `--map-card-focus-padding: 0 80px 0 0` for a column covering the right edge. With `focus_follow: contains` the map also refits once an entity moves under the padding.
+
 ### URL Entity lookup
 
 You can add dynamic url's, for example to use a sensor value in the url. When the parameter changes, the map will redraw with the new tile layer.

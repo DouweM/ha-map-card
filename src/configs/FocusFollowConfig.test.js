@@ -89,6 +89,11 @@ describe('FocusFollowConfig', () => {
       expect(focusFollowConfig.pauseMilliseconds).toBe(5000);
     });
 
+    it('should treat an empty focus_max_zoom as unset', () => {
+      expect(new FocusFollowConfig("contains", 0, "").fitOptions).toEqual({});
+      expect(new FocusFollowConfig("contains", 0, "16").fitOptions).toEqual({ maxZoom: 16 });
+    });
+
     it('should store a valid pause duration in seconds and expose it in milliseconds', () => {
       const focusFollowConfig = new FocusFollowConfig("refocus", 5);
 

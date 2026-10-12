@@ -25,7 +25,7 @@ export default class FocusFollowConfig {
     const parsedPauseSeconds = Number(pauseSeconds);
     this.pauseSeconds = (!isNaN(parsedPauseSeconds) && parsedPauseSeconds > 0) ? parsedPauseSeconds : 0;
     const parsedMaxZoom = Number(maxZoom);
-    this.maxZoom = (maxZoom != null && !isNaN(parsedMaxZoom)) ? parsedMaxZoom : undefined;
+    this.maxZoom = (maxZoom != null && maxZoom !== "" && !isNaN(parsedMaxZoom)) ? parsedMaxZoom : undefined;
     Logger.debug(`[FocusFollowConfig]: Setting up focus follow config with selection ${this.selection}, pauseSeconds ${this.pauseSeconds}`);
   }
 

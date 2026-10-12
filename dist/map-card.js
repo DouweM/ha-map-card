@@ -16476,7 +16476,7 @@ class FocusFollowConfig {
     const parsedPauseSeconds = Number(pauseSeconds);
     this.pauseSeconds = (!isNaN(parsedPauseSeconds) && parsedPauseSeconds > 0) ? parsedPauseSeconds : 0;
     const parsedMaxZoom = Number(maxZoom);
-    this.maxZoom = (maxZoom != null && !isNaN(parsedMaxZoom)) ? parsedMaxZoom : undefined;
+    this.maxZoom = (maxZoom != null && maxZoom !== "" && !isNaN(parsedMaxZoom)) ? parsedMaxZoom : undefined;
     Logger.debug(`[FocusFollowConfig]: Setting up focus follow config with selection ${this.selection}, pauseSeconds ${this.pauseSeconds}`);
   }
 
@@ -20032,10 +20032,17 @@ class EntitiesRenderService {
     if(points.length === 0) {
       return;
     }
+    // A map that isn't laid out (a hidden tab or card) has no view to fit to;
+    // it fits again on the first update once it's shown.
+    const size = this.map.getSize?.();
+    if(size && (size.x === 0 || size.y === 0)) {
+      return;
+    }
     // If not, get bounds of all markers rendered
     const bounds = (new leafletSrcExports.LatLngBounds(points)).pad(0.1);
+    const padding = this._focusPadding();
     if(this.focusFollowConfig.isContains) {
-      if(this.map.getBounds().contains(bounds)) {
+      if(this._visibleBounds(padding).contains(bounds)) {
         return;
       }
     }
@@ -20043,7 +20050,7 @@ class EntitiesRenderService {
     this.map.once('moveend', () => {
       this._isAutoFitting = false;
     });
-    this.map.fitBounds(bounds, this.focusFollowConfig?.fitOptions ?? {});
+    this.map.fitBounds(bounds, this._fitOptions(padding));
     Logger.debug("[EntitiesRenderService.updateInitialView]: Updating bounds to: " + points.join(","));
   }
 
@@ -20058,8 +20065,79 @@ class EntitiesRenderService {
     this.map.once('moveend', () => {
       this._isAutoFitting = false;
     });
-    this.map.fitBounds(bounds, this.focusFollowConfig?.fitOptions ?? {});
+    this.map.fitBounds(bounds, this._fitOptions(this._focusPadding()));
     Logger.debug("[EntitiesRenderService.setInitialView]: Setting initial view to: " + points.join(","));
+  }
+
+  /**
+   * Space along each edge of the map that a fit leaves clear, from the
+   * `--map-card-focus-padding` CSS property: one to four lengths in pixels, in
+   * the order of CSS's own `padding`. It is a property rather than an option so
+   * that whatever covers part of the map -- an overlay laid over it by the
+   * dashboard -- can say how much it covers, and change that as it grows.
+   * @returns {{top: number, right: number, bottom: number, left: number}}
+   */
+  _focusPadding() {
+    const none = {top: 0, right: 0, bottom: 0, left: 0};
+    const container = this.map.getContainer?.();
+    if(!container || typeof getComputedStyle !== "function") {
+      return none;
+    }
+    const value = getComputedStyle(container).getPropertyValue("--map-card-focus-padding").trim();
+    const lengths = value.split(/\s+/).filter(Boolean).map((v) => parseFloat(v));
+    if(lengths.length === 0 || lengths.length > 4 || lengths.some((v) => isNaN(v) || v < 0)) {
+      if(value) {
+        Logger.debug(`[EntitiesRenderService._focusPadding]: Ignoring --map-card-focus-padding "${value}"`);
+      }
+      return none;
+    }
+    const [top, right = top, bottom = top, left = right] = lengths;
+    // Padding that leaves next to nothing clear is no help: Leaflet would fit
+    // into a negative space at its maximum zoom, and nothing would ever be
+    // contained, so every update would refit. Drop it on that axis instead.
+    const size = this.map.getSize?.();
+    const clear = (extent, a, b) => extent - a - b >= extent / 4;
+    const horizontal = !size || clear(size.x, left, right);
+    const vertical = !size || clear(size.y, top, bottom);
+    if(!horizontal || !vertical) {
+      Logger.debug(`[EntitiesRenderService._focusPadding]: Ignoring --map-card-focus-padding "${value}" on a ${size.x}x${size.y} map`);
+    }
+    return {
+      top: vertical ? top : 0,
+      right: horizontal ? right : 0,
+      bottom: vertical ? bottom : 0,
+      left: horizontal ? left : 0,
+    };
+  }
+
+  /**
+   * The part of the map a fit would keep markers in: the view less its padding.
+   * @param {{top: number, right: number, bottom: number, left: number}} padding
+   * @returns {LatLngBounds}
+   */
+  _visibleBounds(padding) {
+    const view = this.map.getBounds();
+    if(!padding.top && !padding.right && !padding.bottom && !padding.left) {
+      return view;
+    }
+    const size = this.map.getSize();
+    return new leafletSrcExports.LatLngBounds(
+      this.map.containerPointToLatLng([padding.left, size.y - padding.bottom]),
+      this.map.containerPointToLatLng([size.x - padding.right, padding.top]),
+    );
+  }
+
+  /**
+   * @param {{top: number, right: number, bottom: number, left: number}} padding
+   * @returns {object} options for Leaflet's fitBounds
+   */
+  _fitOptions(padding) {
+    const options = {...(this.focusFollowConfig?.fitOptions ?? {})};
+    if(padding.top || padding.right || padding.bottom || padding.left) {
+      options.paddingTopLeft = [padding.left, padding.top];
+      options.paddingBottomRight = [padding.right, padding.bottom];
+    }
+    return options;
   }
 }
 

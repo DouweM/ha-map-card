@@ -70,6 +70,29 @@ describe("EntitiesRenderService", () => {
       entitiesRenderService.setInitialView();
       expect(map.fitBounds).toBeCalledWith(expect.anything(), { maxZoom: 16 });
     });
+
+    it("leaves the --map-card-focus-padding edges clear", () => {
+      const container = document.createElement("div");
+      container.style.setProperty("--map-card-focus-padding", "0 80px 10px 0");
+      document.body.appendChild(container);
+      const map = {
+        setView: jest.fn(),
+        fitBounds: jest.fn(),
+        once: jest.fn(),
+        getContainer: () => container,
+      };
+      const focusFollow = new FocusFollowConfig("contains", 0, 16);
+      const entitiesRenderService = new EntitiesRenderService(map, {}, focusFollow, [], {}, {}, {}, false);
+      entitiesRenderService.entities = testDataToMarker([[1.1, 2.1], [2.1, 3.1]]);
+
+      entitiesRenderService.setInitialView();
+      expect(map.fitBounds).toBeCalledWith(expect.anything(), {
+        maxZoom: 16,
+        paddingTopLeft: [0, 0],
+        paddingBottomRight: [80, 10],
+      });
+      container.remove();
+    });
   });
 
   describe("updateInitialView", () => {
@@ -160,6 +183,79 @@ describe("EntitiesRenderService", () => {
     entitiesRenderService.entities = testDataToMarker(testData);
     entitiesRenderService.updateInitialView();
     expect(map.fitBounds).toBeCalled();
+  });
+
+  describe("_focusPadding", () => {
+    const paddingFor = (value, size = {x: 400, y: 300}) => {
+      const container = document.createElement("div");
+      container.style.setProperty("--map-card-focus-padding", value);
+      document.body.appendChild(container);
+      const service = new EntitiesRenderService({getContainer: () => container, getSize: () => size}, {}, new FocusFollowConfig("contains"), [], {}, {}, {}, false);
+      const padding = service._focusPadding();
+      container.remove();
+      return padding;
+    };
+
+    it("reads CSS padding shorthand", () => {
+      expect(paddingFor("10px")).toEqual({top: 10, right: 10, bottom: 10, left: 10});
+      expect(paddingFor("10px 20px")).toEqual({top: 10, right: 20, bottom: 10, left: 20});
+      expect(paddingFor("10px 20px 30px")).toEqual({top: 10, right: 20, bottom: 30, left: 20});
+      expect(paddingFor("1px 2px 3px 4px")).toEqual({top: 1, right: 2, bottom: 3, left: 4});
+    });
+
+    it("ignores what isn't padding", () => {
+      expect(paddingFor("")).toEqual({top: 0, right: 0, bottom: 0, left: 0});
+      expect(paddingFor("wide")).toEqual({top: 0, right: 0, bottom: 0, left: 0});
+      expect(paddingFor("-5px")).toEqual({top: 0, right: 0, bottom: 0, left: 0});
+    });
+
+    it("drops padding that would leave too little of the map clear", () => {
+      expect(paddingFor("10px 350px 10px 0")).toEqual({top: 10, right: 0, bottom: 10, left: 0});
+      expect(paddingFor("0 80px", {x: 0, y: 0})).toEqual({top: 0, right: 0, bottom: 0, left: 0});
+    });
+  });
+
+  it("in case of a map that isn't laid out", () => {
+    const map = {
+      setView: jest.fn(),
+      fitBounds: jest.fn(),
+      getBounds: jest.fn().mockReturnValue({contains: jest.fn().mockReturnValue(false)}),
+      getSize: () => ({x: 0, y: 0}),
+      once: jest.fn(),
+    };
+    const entitiesRenderService = new EntitiesRenderService(map, {}, new FocusFollowConfig("contains"), [], {}, {}, {}, false);
+    entitiesRenderService.entities = testDataToMarker([[1.1, 2.1], [2.1, 3.1]]);
+    entitiesRenderService.updateInitialView();
+    expect(map.fitBounds).not.toBeCalled();
+  });
+
+  it("in case of FocusFollow.isContains and an entity under the padding", () => {
+    const container = document.createElement("div");
+    container.style.setProperty("--map-card-focus-padding", "0 100px 0 0");
+    document.body.appendChild(container);
+    // A 400px-wide view of longitudes 0..4 and latitudes 0..4: the right
+    // 100px, east of longitude 3, is covered.
+    const map = {
+      setView: jest.fn(),
+      fitBounds: jest.fn(),
+      getBounds: jest.fn().mockReturnValue({contains: jest.fn().mockReturnValue(true)}),
+      getSize: () => ({x: 400, y: 400}),
+      containerPointToLatLng: ([x, y]) => latLng(4 - y / 100, x / 100),
+      getContainer: () => container,
+      once: jest.fn(),
+    };
+    const focusFollow = new FocusFollowConfig("contains");
+    const entitiesRenderService = new EntitiesRenderService(map, {}, focusFollow, {}, {}, {}, true);
+
+    entitiesRenderService.entities = testDataToMarker([[2, 1], [2, 3.5]]);
+    entitiesRenderService.updateInitialView();
+    expect(map.fitBounds).toBeCalled();
+
+    map.fitBounds.mockClear();
+    entitiesRenderService.entities = testDataToMarker([[2, 1], [2, 2.5]]);
+    entitiesRenderService.updateInitialView();
+    expect(map.fitBounds).not.toBeCalled();
+    container.remove();
   });
 
   it("in case of FocusFollow.isRefocus", () => {
