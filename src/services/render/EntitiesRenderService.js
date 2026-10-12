@@ -10,6 +10,10 @@ import HaHistoryService from "../HaHistoryService";
 import FocusFollowConfig from "../../configs/FocusFollowConfig";
 
 
+
+/** How far apart, as a fraction of a pin, spread markers sit: overlapping a little. */
+const SPREAD_GAP = 0.7;
+
 export default class EntitiesRenderService {
 
   /** @type {[Entity]} */
@@ -82,6 +86,13 @@ export default class EntitiesRenderService {
     if (!this.focusFollowConfig.isNone && this.focusFollowConfig.hasPause) {
       this._setupFollowPauseListeners();
     }
+
+    if (this.markerGrouping === "spread") {
+      // Overlap is measured on screen, so it changes with the zoom. This also
+      // catches the first setView, before which nothing can be projected.
+      this._onSpreadZoom = () => this._updateSpreadOffsets();
+      this.map.on('zoomend', this._onSpreadZoom);
+    }
   }
 
   _setupFollowPauseListeners() {
@@ -149,6 +160,10 @@ export default class EntitiesRenderService {
       this.map.off('dragstart', this._pauseFollow);
       this.map.off('zoomstart', this._pauseFollow);
     }
+    if (this._onSpreadZoom) {
+      this.map.off('zoomend', this._onSpreadZoom);
+      this._onSpreadZoom = null;
+    }
     if (this._scheduleResume) {
       this.map.off('mouseup', this._scheduleResume);
       this.map.off('dragend', this._scheduleResume);
@@ -180,46 +195,97 @@ export default class EntitiesRenderService {
   }
 
   _updateSpreadOffsets() {
-    // Group entities by proximity (within ~1 meter), excluding group: false entities
-    const groups = new Map();
+    // Markers whose pins overlap on screen by more than a little, excluding
+    // group: false entities. Two people a few metres apart are as stacked as two
+    // in the same spot once the map is zoomed out, so this works in pixels.
+    const placed = [];
     for (const entity of this.entities) {
       if (!entity.marker || entity.config.group === false) continue;
-      const latLng = entity.latLng;
-      const key = `${latLng.lat.toFixed(5)},${latLng.lng.toFixed(5)}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(entity);
+      let point;
+      try {
+        // Where the marker is drawn, which lags latLng by up to
+        // positionUpdateThreshold.
+        point = this.map.latLngToLayerPoint(entity.marker.getLatLng?.() ?? entity.latLng);
+      } catch (e) {
+        // No view yet; the first zoomend comes back here.
+        return;
+      }
+      placed.push({ entity, point, size: entity.config.size });
     }
+
+    // Union nearby markers, so a chain of three ends up in one group.
+    const parent = placed.map((_, i) => i);
+    const root = (i) => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const gap = SPREAD_GAP * Math.max(placed[i].size, placed[j].size);
+        if (placed[i].point.distanceTo(placed[j].point) < gap) {
+          parent[root(i)] = root(j);
+        }
+      }
+    }
+    const groups = new Map();
+    placed.forEach((m, i) => {
+      const r = root(i);
+      if (!groups.has(r)) groups.set(r, []);
+      groups.get(r).push(m);
+    });
 
     for (const group of groups.values()) {
       if (group.length <= 1) {
         // Single entity — clear any previous offset
-        if (group[0]._spreadOffset || group[0]._spreadApplied) {
-          group[0]._spreadOffset = null;
-          group[0]._updateMarkerIcon();
+        const entity = group[0].entity;
+        if (entity._spreadOffset || entity._spreadApplied) {
+          entity._spreadOffset = null;
+          entity._updateMarkerIcon();
         }
         continue;
       }
 
+      // Lay the group out on a circle round its centre, neighbours SPREAD_GAP of
+      // a pin apart: still touching, so they read as together, but each face
+      // shows. Members keep the side of the centre they are really on, so
+      // whoever is to the west stays to the west.
       const n = group.length;
-      const maxSize = Math.max(...group.map(e => e.config.size));
-      const radius = maxSize * 0.35;
+      const cx = group.reduce((sum, m) => sum + m.point.x, 0) / n;
+      const cy = group.reduce((sum, m) => sum + m.point.y, 0) / n;
+      const gap = SPREAD_GAP * Math.max(...group.map(m => m.size));
+      const radius = n === 2 ? gap / 2 : gap / (2 * Math.sin(Math.PI / n));
+      // Members on the centre itself have no side, and take the slots left over.
+      const angleOf = (m) => Math.hypot(m.point.x - cx, m.point.y - cy) >= 0.5
+        ? Math.atan2(m.point.y - cy, m.point.x - cx)
+        : null;
+      const sided = group.filter(m => angleOf(m) !== null).sort((a, b) => angleOf(a) - angleOf(b));
+      const ordered = [...sided, ...group.filter(m => angleOf(m) === null)];
+      // Turn the circle to sit closest to where they all really are (the mean
+      // of each one's angle less its slot's), not pinned to whoever sorts first.
+      let start = Math.PI; // start from left
+      if (sided.length) {
+        let sin = 0, cos = 0;
+        sided.forEach((m, i) => {
+          const a = angleOf(m) - 2 * Math.PI * i / n;
+          sin += Math.sin(a);
+          cos += Math.cos(a);
+        });
+        start = Math.atan2(sin, cos);
+      }
 
-      for (let i = 0; i < n; i++) {
-        const angle = (2 * Math.PI * i / n) + Math.PI; // start from left
+      ordered.forEach((m, i) => {
+        const angle = start + 2 * Math.PI * i / n;
         const newOffset = {
-          x: Math.round(Math.cos(angle) * radius),
-          y: Math.round(Math.sin(angle) * radius)
+          x: Math.round(cx + Math.cos(angle) * radius - m.point.x),
+          y: Math.round(cy + Math.sin(angle) * radius - m.point.y)
         };
 
         // Compare against what actually landed on the marker, not what was last
         // asked for: on a cold load the DOM node may not exist yet, and keying off
         // the intent would record the offset as handled and never come back.
-        const prev = group[i]._spreadApplied;
-        group[i]._spreadOffset = newOffset;
+        const prev = m.entity._spreadApplied;
+        m.entity._spreadOffset = newOffset;
         if (!prev || prev.x !== newOffset.x || prev.y !== newOffset.y) {
-          group[i]._updateMarkerIcon();
+          m.entity._updateMarkerIcon();
         }
-      }
+      });
     }
   }
 

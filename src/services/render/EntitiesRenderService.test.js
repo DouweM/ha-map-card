@@ -1,6 +1,6 @@
 import FocusFollowConfig from "../../configs/FocusFollowConfig";
 import EntitiesRenderService from "./EntitiesRenderService";
-import { LatLng, latLng } from "leaflet";
+import { LatLng, latLng, point } from "leaflet";
 
 describe("EntitiesRenderService", () => {
   describe("render", () => {
@@ -545,8 +545,11 @@ function testDataToMarker(testData, focusOnFit = true) {
       _updateMarkerIcon: jest.fn(),
     });
 
+    // One pixel per 1e-5 degree: 48px pins overlap below ~0.0005 degrees apart.
+    const map = { latLngToLayerPoint: (ll) => point(ll.lng * 1e5, -ll.lat * 1e5) };
+
     const service = (entities) => {
-      const s = new EntitiesRenderService({}, {}, new FocusFollowConfig("none"), [], {}, {}, {}, false, "spread");
+      const s = new EntitiesRenderService(map, {}, new FocusFollowConfig("none"), [], {}, {}, {}, false, "spread");
       s.entities = entities;
       return s;
     };
@@ -593,6 +596,86 @@ function testDataToMarker(testData, focusOnFit = true) {
       const b = at(19.4, -99.1);
       service([a, b])._updateSpreadOffsets();
       expect(a._spreadOffset).not.toEqual(b._spreadOffset);
+    });
+
+    it("spreads markers that are near but not in the same spot", () => {
+      // 10px apart: almost entirely on top of each other at this zoom.
+      const west = at(19.4, -99.1);
+      const east = at(19.4, -99.0999);
+      service([east, west])._updateSpreadOffsets();
+      const x = (e, lng) => lng * 1e5 + e._spreadOffset.x;
+      const gap = x(east, -99.0999) - x(west, -99.1);
+      // Placed 0.7 of a pin apart, overlapping a little, west still west.
+      expect(gap).toBeGreaterThanOrEqual(33);
+      expect(gap).toBeLessThanOrEqual(35);
+      expect(east._spreadOffset.y).toBe(0);
+    });
+
+    it("leaves markers alone that barely overlap", () => {
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.0996); // 40px apart, more than 0.7 of a 48px pin
+      service([a, b])._updateSpreadOffsets();
+      expect(a._spreadOffset).toBeNull();
+      expect(b._spreadOffset).toBeNull();
+    });
+
+    it("spreads a chain of three as one group", () => {
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.09975);
+      const c = at(19.4, -99.0995);
+      service([a, b, c])._updateSpreadOffsets();
+      const pos = [[a, -99.1], [b, -99.09975], [c, -99.0995]]
+        .map(([e, lng]) => point(lng * 1e5 + e._spreadOffset.x, -19.4 * 1e5 + e._spreadOffset.y));
+      for (let i = 0; i < 3; i++) {
+        for (let j = i + 1; j < 3; j++) {
+          expect(pos[i].distanceTo(pos[j])).toBeGreaterThanOrEqual(32);
+        }
+      }
+    });
+
+    const drawn = (e, lat, lng) => point(lng * 1e5 + e._spreadOffset.x, -lat * 1e5 + e._spreadOffset.y);
+
+    it("keeps three markers on the sides they really are", () => {
+      // One well to the west, two just east of it and close together.
+      const a = at(19.4, -99.1);
+      const b = at(19.40001, -99.09975);
+      const c = at(19.39999, -99.09975);
+      service([b, c, a])._updateSpreadOffsets();
+      const [pa, pb, pc] = [drawn(a, 19.4, -99.1), drawn(b, 19.40001, -99.09975), drawn(c, 19.39999, -99.09975)];
+      expect(pa.x).toBeLessThan(pb.x);
+      expect(pa.x).toBeLessThan(pc.x);
+      expect(pb.y).toBeLessThan(pc.y); // b is north of c
+    });
+
+    it("keeps east east when two share the centre", () => {
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.1);
+      const east = at(19.4, -99.0998);
+      const west = at(19.4, -99.1002);
+      service([a, b, east, west])._updateSpreadOffsets();
+      expect(drawn(east, 19.4, -99.0998).x).toBeGreaterThan(drawn(west, 19.4, -99.1002).x);
+    });
+
+    it("clears the spread once zooming in separates them", () => {
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.0999);
+      const s = service([a, b]);
+      s._updateSpreadOffsets();
+      expect(a._spreadOffset).not.toBeNull();
+      a._spreadApplied = a._spreadOffset;
+      s.map = { latLngToLayerPoint: (ll) => point(ll.lng * 1e6, -ll.lat * 1e6) };
+      s._updateSpreadOffsets();
+      expect(a._spreadOffset).toBeNull();
+      expect(b._spreadOffset).toBeNull();
+    });
+
+    it("waits for a view before spreading", () => {
+      const a = at(19.4, -99.1);
+      const b = at(19.4, -99.1);
+      const s = service([a, b]);
+      s.map = { latLngToLayerPoint: () => { throw new Error("Set map center and zoom first."); } };
+      expect(() => s._updateSpreadOffsets()).not.toThrow();
+      expect(a._updateMarkerIcon).not.toHaveBeenCalled();
     });
 
     it("leaves a lone marker unoffset", () => {
