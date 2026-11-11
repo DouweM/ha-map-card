@@ -327,4 +327,23 @@ describe('Entity place pill (display: pill)', () => {
   it('tooltip is the friendly name when display is not pill', () => {
     expect(makeEntity('marker', 'Extended Family').tooltip).toBe('Mom Location');
   });
+
+  describe('on a turned map', () => {
+    // The callout's dot, not its middle, is on the spot, so that is what the
+    // marker is turned upright about.
+    const iconHtml = (bearing, zoom) => {
+      const entity = makeEntity('pill', 'Extended Family');
+      entity.map = { getZoom: () => zoom, _mapCardBearing: bearing };
+      return entity._createIcon().options.html;
+    };
+
+    it('turns a callout about its dot', () => {
+      // size 48: the pill is 110x56, the box 144x90, the dot 2px in from its corner
+      expect(iconHtml(90, 18)).toContain('--map-card-anchor: 142px 88px;');
+    });
+    it('leaves a centred pill, and every pill on an ordinary map, as they were', () => {
+      expect(iconHtml(90, 10)).not.toContain('--map-card-anchor');
+      expect(iconHtml(0, 18)).not.toContain('--map-card-anchor');
+    });
+  });
 });

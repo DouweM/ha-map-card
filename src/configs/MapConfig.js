@@ -7,6 +7,7 @@ import GeoJsonLayerConfig from "./GeoJsonLayerConfig.js";
 import Logger from "../util/Logger.js";
 import Entity from "../models/Entity.js";
 import FocusFollowConfig from "./FocusFollowConfig.js";
+import { normalizeBearing } from "../leaflet/Bearing.js";
 
 
 export default class MapConfig {
@@ -49,6 +50,8 @@ export default class MapConfig {
   focusFollow;
   /** @type {string} */
   markerGrouping;
+  /** @type {number} 0, 90, 180 or 270: the compass direction at the top of the card */
+  bearing;
 
   /** @type {boolean} */
   debug = false;
@@ -66,6 +69,8 @@ export default class MapConfig {
     // Read directly (not via _setConfigWithDefault, which treats a null default
     // as "required" and would throw for every card that omits sync_group).
     this.syncGroup = inputConfig.sync_group ?? null;
+    // Quarter turns only; anything else warns and shows north up.
+    this.bearing = normalizeBearing(inputConfig.bearing);
 
     // Get theme mode.
     this.themeMode = ['dark', 'light', 'auto'].includes(inputConfig.theme_mode) ? inputConfig.theme_mode : 'auto';

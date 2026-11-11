@@ -1,6 +1,7 @@
 import FocusFollowConfig from "../../configs/FocusFollowConfig";
 import EntitiesRenderService from "./EntitiesRenderService";
-import { LatLng, latLng, point } from "leaflet";
+import L, { LatLng, latLng, point } from "leaflet";
+import { createTurnedContainer, turnMap, containerToScreen } from "../../leaflet/Bearing.js";
 
 describe("EntitiesRenderService", () => {
   describe("render", () => {
@@ -249,6 +250,72 @@ describe("EntitiesRenderService", () => {
     it("drops padding that would leave too little of the map clear", () => {
       expect(paddingFor("10px 350px 10px 0")).toEqual({top: 10, right: 0, bottom: 10, left: 0});
       expect(paddingFor("0 80px", {x: 0, y: 0})).toEqual({top: 0, right: 0, bottom: 0, left: 0});
+    });
+  });
+
+  describe("fitting a turned map", () => {
+    // A real map, laid out as MapCard lays out bearing: 90 on a card 300px wide
+    // and 200px tall: Leaflet's own container is 200 wide and 300 tall.
+    const turnedMap = (padding) => {
+      const outer = document.createElement("div");
+      document.body.appendChild(outer);
+      outer.style.setProperty("--map-card-focus-padding", padding);
+      const inner = createTurnedContainer(outer, 90);
+      // jsdom has no inheritance of custom properties through getComputedStyle.
+      inner.style.setProperty("--map-card-focus-padding", padding);
+      for (const [prop, value] of [["clientWidth", 200], ["clientHeight", 300], ["offsetWidth", 200], ["offsetHeight", 300]]) {
+        Object.defineProperty(inner, prop, {value});
+      }
+      // Somewhere else entirely, so only a fit brings them into view (and the
+      // zoom changes, which jsdom does without animating).
+      const map = L.map(inner).setView([0, 0], 3);
+      turnMap(map, 90);
+      return {outer, map};
+    };
+    // Where a point is drawn on the card, from its top-left corner.
+    const onCard = (map, ll) => {
+      const p = map.latLngToContainerPoint(ll);
+      const s = containerToScreen(90, p.x - 100, p.y - 150);
+      return {x: s.x + 150, y: s.y + 100};
+    };
+    // Strung out north to south, so across the card.
+    const people = [[19.4400, -99.1332], [19.4300, -99.1330], [19.4200, -99.1334]];
+
+    it("reads the padding off the card as it is seen", () => {
+      const {outer, map} = turnedMap("0 80px 0 0");
+      const service = new EntitiesRenderService(map, {}, new FocusFollowConfig("contains"), [], {}, {}, {}, false);
+      // The card's right edge is the bottom of the map's own frame.
+      expect(service._focusPadding()).toEqual({top: 0, right: 0, bottom: 80, left: 0});
+      outer.remove();
+    });
+
+    it("keeps everybody on the card and out from under the padding", () => {
+      const {outer, map} = turnedMap("0 120px 0 0");
+      const service = new EntitiesRenderService(map, {}, new FocusFollowConfig("contains"), [], {}, {}, {}, false);
+      service.entities = testDataToMarker(people);
+      service.setInitialView();
+      expect(map.getZoom()).toBeGreaterThan(10);
+      for (const ll of people) {
+        const p = onCard(map, ll);
+        expect(p.x).toBeGreaterThanOrEqual(0);
+        expect(p.x).toBeLessThanOrEqual(300 - 120);
+        expect(p.y).toBeGreaterThanOrEqual(0);
+        expect(p.y).toBeLessThanOrEqual(200);
+      }
+      // and contains is satisfied by its own fit, so it doesn't refit again
+      const fitBounds = jest.spyOn(map, "fitBounds");
+      service.updateInitialView();
+      expect(fitBounds).not.toHaveBeenCalled();
+      outer.remove();
+    });
+
+    it("caps the fit at focus_max_zoom", () => {
+      const {outer, map} = turnedMap("");
+      const service = new EntitiesRenderService(map, {}, new FocusFollowConfig("contains", 0, 16), [], {}, {}, {}, false);
+      service.entities = testDataToMarker([[19.4326, -99.1332], [19.4326, -99.1332]]);
+      service.setInitialView();
+      expect(map.getZoom()).toBe(16);
+      outer.remove();
     });
   });
 
@@ -654,6 +721,39 @@ function testDataToMarker(testData, focusOnFit = true) {
       const west = at(19.4, -99.1002);
       service([a, b, east, west])._updateSpreadOffsets();
       expect(drawn(east, 19.4, -99.0998).x).toBeGreaterThan(drawn(west, 19.4, -99.1002).x);
+    });
+
+    describe("on a turned map", () => {
+      // The same projection, on a map with bearing: 90.
+      const turned = { ...map, _mapCardBearing: 90 };
+      const onScreen = (e) => containerToScreen(90, e._spreadOffset.x, e._spreadOffset.y);
+
+      it("fans two in the same spot out across the screen, not up and down it", () => {
+        const a = at(19.4, -99.1);
+        const b = at(19.4, -99.1);
+        const s = service([a, b]);
+        s.map = turned;
+        s._updateSpreadOffsets();
+        const [sa, sb] = [onScreen(a), onScreen(b)];
+        expect(sa.y).toBe(0);
+        expect(sb.y).toBe(0);
+        expect(Math.abs(sa.x - sb.x)).toBeGreaterThanOrEqual(33);
+        // The first takes the left of the screen, as on an ordinary map.
+        expect(sa.x).toBeLessThan(0);
+      });
+
+      it("keeps east east: above, where the map shows east", () => {
+        const west = at(19.4, -99.1);
+        const east = at(19.4, -99.0999);
+        const s = service([east, west]);
+        s.map = turned;
+        s._updateSpreadOffsets();
+        // Offsets stay in the map's own frame (they ride inside the turned box):
+        // the same as on an ordinary map.
+        const x = (e, lng) => lng * 1e5 + e._spreadOffset.x;
+        expect(x(east, -99.0999) - x(west, -99.1)).toBeGreaterThanOrEqual(33);
+        expect(onScreen(east).y).toBeLessThan(onScreen(west).y);
+      });
     });
 
     it("clears the spread once zooming in separates them", () => {

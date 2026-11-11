@@ -35,7 +35,13 @@ describe("MapConfig", () => {
       expect(mapConfig.mapOptions.minZoom).toBe(-4);
     });
 
-    it("complains when neither a [X, Y], an entity or a focus entity is given", () => {
+    it("reads bearing as a quarter turn, north up without one", () => {
+      expect(new MapConfig({ x: 0.1, y: 0.1 }).bearing).toBe(0);
+      expect(new MapConfig({ x: 0.1, y: 0.1, bearing: 90 }).bearing).toBe(90);
+      expect(new MapConfig({ x: 0.1, y: 0.1, bearing: -90 }).bearing).toBe(270);
+    });
+
+        it("complains when neither a [X, Y], an entity or a focus entity is given", () => {
       expect(() =>  new MapConfig({})).toThrowError("We need a map latitude & longitude; set at least [x, y], a focus_entity or have at least 1 entities defined.");
     });
 

@@ -15,6 +15,7 @@ import TileLayer from '../leaflet/TileLayer.js';
 import PluginsRenderService from '../services/render/PluginsRenderService.js';
 import GeoJsonRenderService from '../services/render/GeoJsonRenderService.js';
 import { setSharedView } from '../services/ViewSyncStore.js';
+import { createTurnedContainer, removeTurnedContainer, turnMap } from '../leaflet/Bearing.js';
 
 export default class MapCard extends LitElement {
   static get properties() {
@@ -198,7 +199,14 @@ export default class MapCard extends LitElement {
     L.Icon.Default.imagePath = "/static/images/leaflet/images/";
 
     const mapEl = this.shadowRoot.querySelector('#map');
-    let map = L.map(mapEl, this._config.mapOptions);
+    // A bearing lays the map out in a turned box inside #map (see Bearing.js);
+    // without one the map is #map itself, as it always was.
+    const bearing = this._config.bearing;
+    this._turnedEl = bearing ? createTurnedContainer(mapEl, bearing) : undefined;
+    let map = L.map(this._turnedEl ?? mapEl, this._config.mapOptions);
+    if (bearing) {
+      turnMap(map, bearing);
+    }
 
     // Add dark class if darkmode
     this._isDarkMode() ? mapEl.classList.add('dark') : mapEl.classList.add('light');
@@ -302,6 +310,10 @@ export default class MapCard extends LitElement {
     this.entitiesRenderService?.cleanup();
     this.map.remove();
     this.map = undefined;
+    if (this._turnedEl) {
+      removeTurnedContainer(this._turnedEl);
+      this._turnedEl = undefined;
+    }
   }
 
   disconnectedCallback() {
@@ -443,6 +455,66 @@ export default class MapCard extends LitElement {
       }
       .leaflet-tile-pane {
         filter: var(--map-filter);
+      }
+      /* bearing: #map keeps its place on screen, and the map is laid out in a
+         box inside it, transposed for a quarter turn and turned about its centre
+         (the transform is set on the element). Container query units size it
+         off #map. */
+      #map.map-card-turned {
+        position: relative;
+        overflow: hidden;
+        container-type: size;
+      }
+      .map-card-rotated {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+      }
+      /* The map's own box shows #map's background (theme), as #map did. */
+      #map.map-card-turned > .map-card-rotated {
+        background: inherit;
+      }
+      .map-card-rotated.map-card-quarter-turn {
+        width: 100cqh;
+        height: 100cqw;
+        left: calc(50cqw - 50cqh);
+        top: calc(50cqh - 50cqw);
+      }
+      /* Controls are laid back over the card, the right way up. */
+      .map-card-rotated > .leaflet-control-container {
+        position: absolute;
+        width: 100cqw;
+        height: 100cqh;
+        left: calc(50% - 50cqw);
+        top: calc(50% - 50cqh);
+        transform: rotate(var(--map-card-upright));
+        pointer-events: none;
+      }
+      /* Markers stand upright about their anchor. Leaflet positions the marker
+         element itself, and the spread wrapper carries the spread offset (in
+         the map's frame), so what is turned is what's inside those. */
+      .map-card-rotated map-card-entity-marker {
+        display: block;
+      }
+      .map-card-rotated .spread-wrapper > *,
+      .map-card-rotated .leaflet-marker-icon > :not(.spread-wrapper) {
+        transform: rotate(var(--map-card-upright));
+        transform-origin: var(--map-card-anchor, center);
+      }
+      /* Tooltip text: written vertically for a quarter turn, so its box has
+         the text's shape, and the half turn that may be left over done on the
+         text (see Bearing.js). */
+      .map-card-quarter-turn .leaflet-tooltip {
+        writing-mode: vertical-rl;
+      }
+      .map-card-rotated .map-card-upright {
+        display: inline-block;
+      }
+      .map-card-bearing-180 .map-card-upright,
+      .map-card-bearing-270 .map-card-upright {
+        transform: rotate(180deg);
       }
     `;
   }

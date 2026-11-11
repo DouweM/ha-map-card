@@ -8,6 +8,7 @@ import HaDateRangeService from "../HaDateRangeService";
 import HaLinkedEntityService from "../HaLinkedEntityService";
 import HaHistoryService from "../HaHistoryService";
 import FocusFollowConfig from "../../configs/FocusFollowConfig";
+import { getBearing, screenPaddingToContainer, screenToContainer } from "../../leaflet/Bearing.js";
 
 
 
@@ -259,7 +260,10 @@ export default class EntitiesRenderService {
       const ordered = [...sided, ...group.filter(m => angleOf(m) === null)];
       // Turn the circle to sit closest to where they all really are (the mean
       // of each one's angle less its slot's), not pinned to whoever sorts first.
-      let start = Math.PI; // start from left
+      // start from the left of the screen, which on a turned map is another
+      // side of the map's own frame
+      const left = screenToContainer(getBearing(this.map), -1, 0);
+      let start = Math.atan2(left.y, left.x);
       if (sided.length) {
         let sin = 0, cos = 0;
         sided.forEach((m, i) => {
@@ -398,7 +402,10 @@ export default class EntitiesRenderService {
       }
       return none;
     }
-    const [top, right = top, bottom = top, left = right] = lengths;
+    // The property describes the card as it is seen; on a turned map the
+    // fit works in the map's own frame, whose sides are the screen's turned.
+    const [t, r = t, b = t, l = r] = lengths;
+    const {top, right, bottom, left} = screenPaddingToContainer(getBearing(this.map), {top: t, right: r, bottom: b, left: l});
     // Padding that leaves next to nothing clear is no help: Leaflet would fit
     // into a negative space at its maximum zoom, and nothing would ever be
     // contained, so every update would refit. Drop it on that axis instead.

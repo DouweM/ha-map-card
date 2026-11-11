@@ -1,5 +1,6 @@
 
 import { DivIcon, LatLng, Map, Marker } from "leaflet";
+import { getBearing } from "../leaflet/Bearing.js";
 import Circle from "./Circle.js";
 import GeoJson from "./GeoJson.js";
 import Logger from "../util/Logger.js"
@@ -484,6 +485,9 @@ export default class Entity {
     const spreadX = this._spreadOffset?.x ?? 0;
     const spreadY = this._spreadOffset?.y ?? 0;
     const spreadStyle = (spreadX || spreadY) ? ` style="transform: translate(${spreadX}px, ${spreadY}px);"` : '';
+    // On a turned map the marker is turned back upright about its anchor (see
+    // MapCard's styles), which is the middle except for the callout's dot.
+    const anchorStyle = callout && getBearing(this.map) ? ` --map-card-anchor: ${boxW - 2}px ${boxH - 2}px;` : '';
 
     return new DivIcon({
       html: `
@@ -500,7 +504,7 @@ export default class Entity {
             place-icon="${placeIcon ?? ""}"
             callout="${callout}"
             color="${this.config.color}"
-            style="--ha-marker-color: ${this.config.color}; ${this.config.css ?? ''}"
+            style="--ha-marker-color: ${this.config.color}; ${this.config.css ?? ''}${anchorStyle}"
             size="${this.config.size}"
             extra-css-classes="${extraCssClasses}"
             tap-action='${JSON.stringify(this.config.tapAction)}'

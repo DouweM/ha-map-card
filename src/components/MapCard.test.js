@@ -1,5 +1,6 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import MapCard from './MapCard.js';
+import L from 'leaflet';
 
 jest.mock('leaflet');
 jest.mock('lit', () => ({
@@ -90,6 +91,46 @@ describe('MapCard', () => {
       card.render();
 
       expect(card.setup).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('bearing', () => {
+    let mapEl, fakeMap;
+
+    const setUpMap = (bearing) => {
+      mapEl = document.createElement('div');
+      mapEl.id = 'map';
+      card.shadowRoot.querySelector.mockReturnValue(mapEl);
+      card.hass = { states: {}, themes: { darkMode: false } };
+      card.themeMode = 'light';
+      card._config = { mapOptions: { zoomSnap: 1 }, tileLayer: null, syncGroup: null, bearing };
+      fakeMap = { options: { doubleClickZoom: false }, remove: jest.fn() };
+      L.map.mockReturnValue(fakeMap);
+      L.Icon = { Default: {} };
+      card.map = card._setupMap();
+    };
+
+    it('creates the map in #map itself, untouched, without one', () => {
+      setUpMap(0);
+      expect(L.map).toHaveBeenLastCalledWith(mapEl, { zoomSnap: 1 });
+      expect(mapEl.children.length).toBe(0);
+      expect(mapEl.className).toBe('light');
+      expect(fakeMap._mapCardBearing).toBeUndefined();
+      expect(fakeMap.mouseEventToContainerPoint).toBeUndefined();
+    });
+
+    it('creates the map in a turned box inside #map with one, and removes it again', () => {
+      setUpMap(90);
+      const inner = mapEl.firstElementChild;
+      expect(L.map).toHaveBeenLastCalledWith(inner, { zoomSnap: 1 });
+      expect(inner.className).toBe('map-card-rotated map-card-bearing-90 map-card-quarter-turn');
+      expect(mapEl.classList.contains('map-card-turned')).toBe(true);
+      expect(fakeMap._mapCardBearing).toBe(90);
+
+      card._teardown();
+      expect(fakeMap.remove).toHaveBeenCalled();
+      expect(mapEl.children.length).toBe(0);
+      expect(mapEl.classList.contains('map-card-turned')).toBe(false);
     });
   });
 
