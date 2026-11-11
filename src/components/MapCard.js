@@ -203,7 +203,16 @@ export default class MapCard extends LitElement {
     // without one the map is #map itself, as it always was.
     const bearing = this._config.bearing;
     this._turnedEl = bearing ? createTurnedContainer(mapEl, bearing) : undefined;
-    let map = L.map(this._turnedEl ?? mapEl, this._config.mapOptions);
+    let map;
+    try {
+      map = L.map(this._turnedEl ?? mapEl, this._config.mapOptions);
+    } catch (e) {
+      // No map means no teardown, so take the turned box away here, or the
+      // next setup would add a second one.
+      this._turnedEl?.remove();
+      this._turnedEl = undefined;
+      throw e;
+    }
     if (bearing) {
       turnMap(map, bearing);
     }

@@ -487,7 +487,8 @@ export default class Entity {
     const spreadStyle = (spreadX || spreadY) ? ` style="transform: translate(${spreadX}px, ${spreadY}px);"` : '';
     // On a turned map the marker is turned back upright about its anchor (see
     // MapCard's styles), which is the middle except for the callout's dot.
-    const anchorStyle = callout && getBearing(this.map) ? ` --map-card-anchor: ${boxW - 2}px ${boxH - 2}px;` : '';
+    const anchorStyle = callout && getBearing(this.map) ? `; --map-card-anchor: ${boxW - 2}px ${boxH - 2}px;` : '';
+    // (The leading ';' closes an entity css string that doesn't end in one.)
 
     return new DivIcon({
       html: `
